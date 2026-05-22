@@ -13,6 +13,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./tests/setupGlobals.ts", "./tests/setupTests.ts"],
     globals: true,
+    env: {
+      VITE_MOCK_IPC: "1",
+    },
     coverage: {
       reporter: ["text", "lcov"],
     },

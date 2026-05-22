@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "CC Switch",
-    "description": "Claude Code・Codex・Gemini CLI のためのオールインワンアシスタント"
+    "title": "CC Launcher",
+    "description": "エージェント CLI ランチャー — Claude Code・Codex・Gemini CLI のためのオールインワンアシスタント"
   },
   "common": {
     "add": "追加",
@@ -43,7 +43,7 @@
     "notSet": "未設定"
   },
   "firstRunNotice": {
-    "title": "CC Switch へようこそ",
+    "title": "CC Launcher へようこそ",
     "bodyDefault": "CC Switch は Claude Code / Codex / Gemini CLI の複数プロバイダーをワンクリックで切り替えられるツールです。すでにこれらのツールを設定済みの場合、CC Switch は現在の設定を「default」という名前のプロバイダーとして自動的に保存するので、既存の設定が失われることはありません。",
     "bodyOfficial": "リストには「Official（公式）」プリセットも用意されており、公式バージョンに戻したくなったらクリックするだけで切り替えられます。切り替える前に現在の設定は自動で default にバックアップされるので、自由に行き来できます。これが CC Switch の仕組みです 😊",
     "confirm": "了解しました"
@@ -306,6 +306,25 @@
     "tabAuth": "認証",
     "tabAdvanced": "詳細",
     "tabProxy": "ルーティング",
+    "fallback": {
+      "note": "バックエンド IPC 接続後に編集可能になります（現在は Mock モードで動作中）",
+      "general": {
+        "title": "一般設定",
+        "description": "言語 / テーマ / アプリ表示 / スキル保存場所 / ウィンドウとターミナルの基本設定を管理します。"
+      },
+      "proxy": {
+        "title": "ルーティング設定",
+        "description": "ローカルルーティング、アプリごとのプロキシ引き継ぎ、フェイルオーバー、グローバルプロキシを管理します。"
+      },
+      "auth": {
+        "title": "認証センター",
+        "description": "GitHub Copilot と ChatGPT (Codex OAuth) のアカウント認証・更新・切替を管理します。"
+      },
+      "advanced": {
+        "title": "詳細",
+        "description": "設定ディレクトリ、インポート/エクスポート、バックアップ、WebDAV クラウド同期、モデルテスト、ログ設定を管理します。"
+      }
+    },
     "authCenter": {
       "title": "OAuth 認証センター",
       "description": "Claude Code で他のサブスクリプションをご利用いただけます。コンプライアンスリスクにご注意ください。",
@@ -2629,5 +2648,620 @@
     "expiredHint": "{{tool}}コマンドを実行してログインを更新してください",
     "queryFailed": "クエリに失敗しました",
     "refresh": "更新"
+  },
+  "sandbox": {
+    "title": "サンドボックス設定",
+    "subtitle": "L1 ソフトブロックは解除可能、L2 レッドラインは永久禁止",
+    "level": {
+      "title": "サンドボックスレベル",
+      "description": "CLI 起動時に適用されるブロック強度",
+      "strict": "厳格",
+      "strictDesc": "全 L1 ソフトルール + 全 L2 レッドラインをブロック",
+      "medium": "中等",
+      "mediumDesc": "L2 レッドラインのみブロック、L1 は警告のみ",
+      "confirmTitle": "サンドボックスレベルを切替",
+      "confirmMessage": "サンドボックスレベルを変更すると、すべての CLI 起動と既存プロファイルに影響します。続行しますか？",
+      "changed": "サンドボックスレベルを {{level}} に変更しました",
+      "changeFailed": "サンドボックスレベルの変更に失敗：{{error}}"
+    },
+    "l1": {
+      "title": "L1 ソフトブロック — 解除可能だがリスクあり",
+      "description": "これらのルールは 24 時間限定で解除できますが、解除後は AI がプロジェクト内で危険な操作を行う可能性があります。",
+      "empty": "ルールはありません",
+      "loading": "読み込み中...",
+      "loadError": "L1 ルールの読み込みに失敗：{{error}}",
+      "permanentLock": "このルールは解除できません",
+      "unlockButton": "このルールを解除",
+      "relockButton": "再ロック",
+      "statusEnabled": "有効",
+      "statusDisabled": "無効",
+      "statusUnlocked": "🔓 解除中、残り {{hours}} 時間",
+      "statusUnlockedLessThanHour": "🔓 解除中（残り 1 時間未満）",
+      "toggleSuccess": "ルール状態を更新しました",
+      "toggleFailed": "ルール更新に失敗：{{error}}",
+      "relockSuccess": "ルールを再ロックしました",
+      "rm_arbitrary": {
+        "title": "rm -rf 任意パス",
+        "desc": "AI がプロジェクト外で rm -rf を実行することを禁止",
+        "risk1": "プロジェクトファイルがすべて削除される可能性を理解しています",
+        "risk2": "git ワーキングツリーと履歴が破損する可能性を理解しています",
+        "risk3": "データ損失について自己責任で対応します"
+      },
+      "write_outside_cwd": {
+        "title": "作業ディレクトリ外への書込",
+        "desc": "AI が ~, /, C:/ など作業ディレクトリ外に書き込むことを禁止",
+        "risk1": "AI がシステムファイルを上書きする可能性を理解しています",
+        "risk2": "ホームディレクトリが汚染される可能性を理解しています",
+        "risk3": "システム異常について自己責任で対応します"
+      },
+      "sudo_runas": {
+        "title": "sudo / runas 権限昇格",
+        "desc": "AI が sudo / runas で権限昇格して実行することを禁止",
+        "risk1": "昇格後 AI が任意のシステムファイルを変更可能と理解しています",
+        "risk2": "OS サンドボックスを完全にバイパスし得ると理解しています",
+        "risk3": "セキュリティ事故について自己責任で対応します"
+      },
+      "curl_pipe_sh": {
+        "title": "curl | sh リモート実行",
+        "desc": "AI が curl 出力を直接シェルにパイプすることを禁止",
+        "risk1": "リモートスクリプトに悪意あるコードが含まれる可能性を理解しています",
+        "risk2": "未監査バイナリ実行と同等であることを理解しています",
+        "risk3": "侵入事故について自己責任で対応します"
+      },
+      "claude_skip_permissions": {
+        "title": "Claude --dangerously-skip-permissions",
+        "desc": "Claude Code の権限チェック無効化フラグ。永久に解除不可"
+      },
+      "codex_yolo": {
+        "title": "Codex --yolo / 承認バイパス",
+        "desc": "Codex の承認とサンドボックスを完全バイパスするフラグ。永久に解除不可"
+      },
+      "network_revshell": {
+        "title": "ネットワーク逆方向シェル",
+        "desc": "bash -i >& /dev/tcp/ などの逆方向シェルパターン。永久に解除不可"
+      }
+    },
+    "l2": {
+      "title": "L2 ハードレッドライン — 永久禁止",
+      "description": "サンドボックスレベルや操作内容に関わらず、これらのパターンは常にブロックされます。",
+      "permanentLockBadge": "🔒 永久禁止",
+      "whyLink": "理由を見る",
+      "matchType": {
+        "regex": "正規表現",
+        "substring": "部分一致"
+      },
+      "loading": "読み込み中...",
+      "loadError": "L2 レッドラインの読み込みに失敗：{{error}}",
+      "category": {
+        "DiskWipe": "ディスク消去",
+        "BootCritical": "起動関連",
+        "HostsFile": "hosts ファイル",
+        "LauncherSelf": "Launcher 自身の改変",
+        "ReverseShell": "逆方向シェル",
+        "Ransomware": "ランサムウェア",
+        "SudoDestructive": "権限昇格破壊",
+        "CwdSystemRoot": "作業ディレクトリがシステムルート"
+      },
+      "disk_wipe": {
+        "rm_root": "rm -rf / — ルート消去",
+        "rm_home": "rm -rf ~ — ホームディレクトリ消去",
+        "del_root": "del C:\\* — ドライブルート消去",
+        "format": "format / mkfs / wipefs — ディスクフォーマット",
+        "dd_device": "dd of=/dev/sd* — ブロックデバイスへの直接書込"
+      },
+      "boot": {
+        "win_run_key": "Windows Run レジストリキーへの書込",
+        "launchd": "macOS LaunchDaemons への書込"
+      },
+      "hosts": {
+        "unix": "Unix /etc/hosts の変更",
+        "windows": "Windows hosts ファイルの変更"
+      },
+      "launcher": {
+        "cc_switch_dir": "Launcher 自身（~/.cc-switch）の変更"
+      },
+      "revshell": {
+        "bash_tcp": "bash -i 逆方向 TCP シェル",
+        "nc_e": "nc -e 逆方向シェル"
+      },
+      "sudo": {
+        "rm_root": "sudo rm -rf / — 権限昇格消去",
+        "dd_disk": "sudo dd if= — 権限昇格ディスク書込"
+      },
+      "registry": {
+        "run_value": "REG ADD HKLM ...Run — 起動時自動実行"
+      },
+      "cli": {
+        "dangerously_skip": "--dangerously-skip-permissions CLI フラグ"
+      }
+    },
+    "platform": {
+      "windows": "Windows Claude Code には OS サンドボックスが組み込まれていません。5/8 レッドラインは Launcher の Job Object + Restricted Token + DACL で守られています。",
+      "macos": "macOS は sandbox-exec プロファイル + Hardened Runtime による二重防御を使用します。",
+      "linux": "Linux は namespace + seccomp + AppArmor/SELinux で防御します。"
+    },
+    "confirm": {
+      "title": "危険ルールの解除",
+      "step": "ステップ {{current}} / 3",
+      "step1Title": "本当にこのルールを解除しますか？",
+      "step1Lead": "解除後、AI はプロジェクト内で以下の危険な操作を行う可能性があります：",
+      "step1Continue": "リスクを理解した、続行",
+      "step2Title": "リスク了承書にチェック",
+      "step2Lead": "以下 3 項目すべてに明示的に同意する必要があります：",
+      "step3Title": "キーワードを入力して確認",
+      "step3Lead": "以下のキーワードを入力して最終確認してください。大文字小文字を区別し、完全に一致する必要があります。",
+      "step3Keyword": "キーワード",
+      "step3Placeholder": "上のキーワードを 1 文字ずつ入力",
+      "step3Submit": "このルールを 24 時間解除する",
+      "submitting": "解除中...",
+      "back": "戻る",
+      "next": "続行",
+      "cancel": "キャンセル",
+      "unlocked": "解除しました。24 時間後に自動再ロックします",
+      "unlockFailed": "解除に失敗：{{error}}",
+      "keywordZh": "我已知晓",
+      "keywordEn": "I UNDERSTAND",
+      "keywordJa": "理解しました"
+    },
+    "docLink": {
+      "windows": "docs/env-setup-windows-zh.md#section-7",
+      "macos": "docs/env-setup-macos-zh.md#section-7"
+    }
+  },
+  "shell": {
+    "brandTagline": "エージェント CLI ランチャー",
+    "launcherEntry": "ランチャー",
+    "nav": {
+      "home": "ランチャー",
+      "install": "インストール",
+      "profile": "プロファイル",
+      "launch": "起動",
+      "switch": "ノード切替",
+      "systemcheck": "システム検査",
+      "sandbox": "サンドボックス"
+    },
+    "modeSwitch": {
+      "title": "UI モード",
+      "novice": "初心者",
+      "expert": "エキスパート",
+      "noviceHint": "初心者モード：コア機能のみを表示します。",
+      "expertHint": "エキスパートモード：高度なパネルをすべて表示します。",
+      "confirmTitle": "モード切り替えの確認",
+      "confirmNoviceToExpert": "エキスパートモードに切り替えるとすべての高度なパネルが解放され、誤操作で CLI に影響する可能性があります。続行しますか？",
+      "confirmExpertToNovice": "初心者モードに戻すとエキスパートパネルが非表示になります（データは保持されます）。続行しますか？",
+      "switchedTo": {
+        "novice": "初心者モードに切り替えました",
+        "expert": "エキスパートモードに切り替えました"
+      },
+      "switchFailed": "モード切り替えに失敗しました：{{error}}"
+    },
+    "noviceStub": {
+      "title": "初心者モードホーム",
+      "subtitle": "NoviceHome のプレースホルダー — A3 で実装予定",
+      "description": "新規ホーム（CLI インストール / プロファイル設定 / CLI 起動）は A3 タスクで実装されます。"
+    }
+  },
+  "launcher": {
+    "title": "CLI を起動",
+    "subtitle": "ターミナル選択 → 安全設定確認 → ワンクリック起動",
+    "activeProfile": {
+      "empty": "アクティブなプロファイルがありません",
+      "emptyHint": "起動する前に Profile Manager でプロファイルを作成し有効化してください。",
+      "createLink": "Profile Manager を開く",
+      "header": "アクティブなプロファイル",
+      "providerLabel": "Provider",
+      "providerEmpty": "未設定",
+      "mcpCount": "MCP {{count}}",
+      "skillsCount": "Skills {{count}}",
+      "noProvider": "（Provider なし）"
+    },
+    "terminal": {
+      "title": "システムターミナル選択",
+      "subtitle": "Launcher はシステムターミナルを起動するのみで、内部 PTY は使用しません。",
+      "available": "利用可",
+      "unavailable": "未インストール",
+      "recommended": "推奨",
+      "version": "バージョン {{version}}",
+      "pathLabel": "パス",
+      "empty": "利用可能なシステムターミナルが見つかりません"
+    },
+    "workdir": {
+      "title": "作業ディレクトリ（CWD）",
+      "subtitle": "L2 ハードレッドライン：CLI プロセスはこのディレクトリにロックされます。",
+      "path": "{{path}}",
+      "absoluteLabel": "絶対パス",
+      "open": "フォルダを開く",
+      "opening": "開いています...",
+      "openSuccess": "作業ディレクトリを開きました",
+      "openFailed": "作業ディレクトリを開けませんでした",
+      "resetDisabled": "作業ディレクトリをリセット",
+      "resetTooltip": "L2 レッドライン：CWD escape は永久に無効です"
+    },
+    "safety": {
+      "title": "今回の起動の安全設定",
+      "subtitle": "Launcher が CLI に注入する安全フラグとレッドラインを展開して確認できます。",
+      "flags": "CLI 安全起動フラグ",
+      "flagsHintClaude": "Claude Code セーフモード：yolo を無効化、MCP 隔離、書き込み可能ディレクトリの制限、安全 prompt の追加。",
+      "flagsHintCodex": "Codex はネイティブ [profiles.<name>] で 1:1 マッピング。",
+      "cwd": "CWD ロックパス",
+      "l1Count": "L1 ソフトルール：有効 {{count}} 件",
+      "l2Count": "L2 ハードレッドライン：解除不可 {{count}} 件",
+      "loading": "読み込み中..."
+    },
+    "launchButton": "ワンクリック起動",
+    "launching": "ターミナルを起動中...",
+    "success": {
+      "title": "{{terminal}} で CLI を起動しました",
+      "body": "Profile：{{profile}} | CWD：{{cwd}}",
+      "checkTaskbar": "ウィンドウが表示されない場合はタスクバーをご確認ください。"
+    },
+    "error": {
+      "title": "起動に失敗しました",
+      "nodeMissing": "Node ランタイムが検出されません。CLI を起動できません。",
+      "cliMissing": "{{cli}} CLI が検出されません。インストールウィザードで導入してください。",
+      "profileInvalid": "プロファイル設定が壊れています：{{detail}}",
+      "terminalNotFound": "選択されたターミナルが利用できません。再選択してください。",
+      "unknown": "不明なエラー：{{detail}}",
+      "fixLink": "インストールウィザードを開く",
+      "fixProfileLink": "Profile Manager を開く",
+      "close": "閉じる"
+    },
+    "disabledReason": {
+      "noProfile": "まず Profile Manager でプロファイルを有効化してください",
+      "noTerminal": "利用可能なシステムターミナルを選択してください",
+      "launching": "起動中..."
+    }
+  },
+  "profile": {
+    "manager": {
+      "title": "プロファイル管理"
+    },
+    "cli": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
+    "list": {
+      "title": "{{cli}} のプロファイル",
+      "createButton": "新規プロファイル",
+      "empty": "プロファイルがありません。「+ 新規プロファイル」をクリックして開始してください。",
+      "active": "Active",
+      "builtin": "ビルトイン",
+      "switchTo": "このプロファイルに切替",
+      "switchToCurrent": "現在のプロファイル",
+      "providerBadge": "Provider: {{name}}",
+      "providerEmpty": "未設定",
+      "mcpBadge": "MCP: {{count}}",
+      "skillBadge": "Skills: {{count}}",
+      "cannotDeleteBuiltin": "ビルトインプロファイルは削除できません",
+      "cannotDeleteActive": "別のプロファイルに切替えてから削除してください",
+      "cannotDeleteLast": "編集可能なプロファイルを最低 1 つ残してください"
+    },
+    "editor": {
+      "titleCreate": "新規プロファイル",
+      "titleEdit": "プロファイルを編集",
+      "subtitle": "{{cli}} の設定",
+      "nameLabel": "名前",
+      "namePlaceholder": "例：仕事 / 実験",
+      "descriptionLabel": "説明",
+      "iconLabel": "アイコン",
+      "iconColorLabel": "アイコンの色",
+      "providerLabel": "Provider",
+      "providerPlaceholder": "Provider を選択",
+      "providerEmpty": "（未指定）",
+      "mcpLabel": "MCP サブセット",
+      "mcpEmpty": "選択可能な MCP はありません",
+      "mcpEnabledHint": "この CLI で有効化済み",
+      "skillsLabel": "Skills サブセット",
+      "skillsEmpty": "選択可能な Skill はありません",
+      "settingsLabel": "settings.json オーバーレイ（JSON オブジェクト）",
+      "errors": {
+        "nameRequired": "名前は必須です",
+        "settingsInvalidJson": "JSON 形式が不正です",
+        "settingsMustBeObject": "settings.json は JSON オブジェクトである必要があります"
+      }
+    },
+    "switch": {
+      "title": "プロファイル切替プレビュー",
+      "subtitle": "{{from}} → {{to}}",
+      "none": "（なし）",
+      "unchanged": "変更なし",
+      "providerSection": "Provider",
+      "mcpSection": "MCP の差分",
+      "skillsSection": "Skills の差分",
+      "settingsSection": "settings.json の差分",
+      "confirm": "切替を確認",
+      "switching": "切替中...",
+      "retry": "再試行",
+      "failureTitle": "切替失敗",
+      "failureUnknown": "不明なエラー",
+      "backupDir": "バックアップディレクトリ"
+    },
+    "delete": {
+      "title": "プロファイル削除",
+      "message": "プロファイル \"{{name}}\" を削除しますか？この操作は取り消せません。"
+    },
+    "toast": {
+      "createSuccess": "プロファイルを作成しました：{{name}}",
+      "updateSuccess": "プロファイルを更新しました：{{name}}",
+      "switchSuccess": "切替に成功しました",
+      "deleteSuccess": "プロファイルを削除しました",
+      "deleteFailed": {
+        "BUILTIN_PROFILE_PROTECTED": "ビルトインプロファイルは削除できません",
+        "PROFILE_IS_ACTIVE": "現在アクティブなプロファイルは削除できません",
+        "PROFILE_NOT_FOUND": "プロファイルが見つかりません"
+      }
+    }
+  },
+  "systemCheck": {
+    "title": "システムチェック",
+    "subtitle": "17 項目のライブ診断とワンクリック修復",
+    "lastUpdated": "最終更新：{{time}}",
+    "overall": {
+      "green": "すべて準備完了です",
+      "yellow": "一部の項目で改善の余地があります",
+      "red": "対応が必要な項目があります",
+      "missing": "対応が必要な項目があります",
+      "unknown": "診断は完了していません"
+    },
+    "counts": {
+      "green": "緑",
+      "yellow": "黄",
+      "red": "赤",
+      "unknown": "不明"
+    },
+    "groups": {
+      "system": "システムリソース",
+      "runtime": "ランタイム",
+      "env": "環境と権限",
+      "network": "ネットワーク",
+      "workdir": "作業ディレクトリ"
+    },
+    "actions": {
+      "reprobe": "再診断",
+      "fixAll": "一括修復 ({{count}})",
+      "fix": "修復",
+      "learnMore": "詳細",
+      "collapse": "折りたたむ",
+      "expand": "展開"
+    },
+    "summary": {
+      "title": "システムチェック",
+      "label": "システムチェック：緑 {{green}} / 黄 {{yellow}} / 赤 {{red}}"
+    },
+    "error": {
+      "fetch": "レポートを取得できません。再試行してください。"
+    },
+    "fix": {
+      "target": "対象",
+      "batchRemaining": "{{count}} 項目が待機中",
+      "next": "次へ",
+      "retry": "再試行",
+      "cannotCancel": "この処理は取消できません",
+      "toast": {
+        "success": "修復が完了しました",
+        "failed": "修復に失敗しました"
+      },
+      "phase": {
+        "idle": "準備中…",
+        "starting": "開始中…",
+        "running": "実行中…",
+        "validating": "検証中…",
+        "completed": "完了",
+        "failed": "失敗"
+      },
+      "installNode": {
+        "title": "Node.js をインストール",
+        "description": "専用ランタイムに Node.js LTS をインストールします（既存の Node には影響しません）。"
+      },
+      "installGit": {
+        "title": "Git をインストール",
+        "description": "バージョン管理向けに Git をインストールします。"
+      },
+      "cleanEnvVar": {
+        "title": "競合する環境変数を整理",
+        "description": "CLI と競合する環境変数を削除します。バックアップを取得し、いつでも復元可能です。"
+      },
+      "openHomeDir": {
+        "title": "ホームディレクトリを開く",
+        "description": "ホームフォルダを開き、ディスク整理を支援します（ファイルは変更しません）。"
+      },
+      "injectPathEntries": {
+        "title": "PATH を注入",
+        "description": "ランチャー子プロセスにのみ PATH を注入します。システム設定は変更しません。"
+      },
+      "externalLink": {
+        "title": "ドキュメントを開く",
+        "description": "関連ドキュメントを開きます。"
+      }
+    }
+  },
+  "installer": {
+    "title": "CLI インストールウィザード",
+    "subtitle": "Node.js プライベートランタイムを準備し、Claude Code / Codex CLI をインストール",
+    "steps": {
+      "systemCheck": {
+        "title": "システム自己診断"
+      },
+      "node": {
+        "title": "Node.js ランタイム"
+      },
+      "select": {
+        "title": "CLI 選択"
+      },
+      "install": {
+        "title": "インストールと検証"
+      }
+    },
+    "nav": {
+      "back": "戻る",
+      "next": "次へ",
+      "finish": "完了"
+    },
+    "step1": {
+      "redBlocks": "赤信号の項目を先に修復してください。システム自己診断を開いて対応します。",
+      "yellowWarn": "黄色の警告があります。続行できますが、後で確認してください。",
+      "continue": "問題は見つかりません。続行できます。"
+    },
+    "step2": {
+      "detecting": "Node.js を探索中…",
+      "ready": "準備完了: {{version}}",
+      "missing": "Node 20 LTS をプライベートディレクトリにインストールします",
+      "installNote": "CC Launcher は独立ディレクトリに Node 20 LTS をインストールし、システム PATH を汚染しません。",
+      "installButton": "Node をインストール",
+      "installing": "Node をインストール中…",
+      "pathLabel": "プライベートランタイムパス",
+      "uninstallNote": "CC Launcher をアンインストールするとこのディレクトリは自動削除されます"
+    },
+    "step3": {
+      "title": "インストールする CLI を選択",
+      "description": "使用したい Agent CLI を選んでください。既にインストール済みのものは検証用にチェックされます。",
+      "claude": "Claude Code",
+      "codex": "Codex CLI",
+      "installed": "インストール済み",
+      "confirm": "次へ: インストール開始",
+      "noneSelected": "続行するには少なくとも 1 つの CLI を選択してください"
+    },
+    "step4": {
+      "registryPicker": {
+        "title": "レジストリ探索",
+        "subtitle": "4 つの npm ミラーを並列に探索し、最速を自動選択",
+        "probe": "再探索",
+        "probing": "探索中…",
+        "latency": "{{ms}} ms",
+        "fastest": "最速",
+        "manual": "手動でレジストリ指定",
+        "manualPlaceholder": "https://...",
+        "allFailed": "全ミラー接続不可。ネットワークまたは VPN を確認してください。",
+        "retry": "再試行",
+        "note": "Tencent ミラーは一部環境でルートが 404 を返すため自動的にスキップされました",
+        "select": "このソースを使う",
+        "confirmSelection": "選択したミラーで続行",
+        "rowFailed": "失敗",
+        "rowTimeout": "タイムアウト",
+        "rowOk": "OK",
+        "rowUnknown": "不明"
+      },
+      "progress": {
+        "phase": "フェーズ",
+        "speed": "{{kbps}} KB/s",
+        "bytes": "{{loaded}} / {{total}} KB",
+        "cancel": "キャンセル",
+        "success": "{{cli}} のインストール完了 v{{version}}",
+        "error": "{{cli}} のインストールに失敗",
+        "cleaned": "残ったファイルを自動的にクリーンアップしました",
+        "retry": "再試行",
+        "retryDifferent": "別のミラーで再試行",
+        "current": "処理中: {{cli}}"
+      },
+      "allDone": "選択したすべての CLI がインストールされました。管理画面に移動します。"
+    },
+    "cardView": {
+      "title": "CLI 管理",
+      "subtitle": "インストール済み Agent CLI、バージョン、Profile 数",
+      "installed": "インストール済み",
+      "notInstalled": "未インストール",
+      "installing": "インストール中",
+      "version": "バージョン",
+      "profileCount": "{{count}} 個の Profile",
+      "noProfile": "Profile 未作成",
+      "uninstall": "アンインストール",
+      "uninstallConfirmTitle": "{{cli}} をアンインストール？",
+      "uninstallConfirm": "{{cli}} のプライベート node_modules と .bin シンボリックリンクを削除します。元に戻せません。",
+      "viewProfiles": "Profile を表示",
+      "installNow": "今すぐインストール",
+      "reinstall": "ウィザードを再度開く"
+    }
+  },
+  "novice": {
+    "title": "CC Launcher",
+    "buttons": {
+      "install": "ツール一括インストール",
+      "installSubtitle": "Claude Code / Codex などの CLI を自動インストール",
+      "switchProfile": "プロファイル切替",
+      "switchProfileSubtitle": "MCP / Skills / Provider 構成を選択・切替",
+      "switchProfileDisabledReason": "まず CLI をインストールしてください",
+      "launch": "ワンクリック起動",
+      "launchSubtitle": "選択した CLI をシステム端末で起動",
+      "launchDisabledNoCli": "まず CLI をインストールしてください",
+      "launchDisabledNoProfile": "まずプロファイルを作成してください"
+    },
+    "statusBar": {
+      "profile": "プロファイル",
+      "sandbox": "サンドボックス",
+      "system": "システム",
+      "noProfile": "未選択",
+      "sandboxLevel": {
+        "strict": "厳格",
+        "medium": "中"
+      }
+    },
+    "onboarding": {
+      "title": "CC Launcher へようこそ",
+      "step1": {
+        "title": "ようこそ",
+        "body": "CC Launcher は Claude Code や Codex などの Agent CLI をワンクリックでインストール・起動できます。4 ステップで初期設定が完了します。コマンドライン知識は不要です。",
+        "next": "次へ"
+      },
+      "step2": {
+        "title": "セキュリティ規約",
+        "body": "サンドボックスの境界を理解いただいた上で、規約に同意してください。",
+        "terms": "CC Launcher は二層の禁止規則で保護します。L1 ソフトブロック（rm -rf、sudo、危険フラグ等。エキスパートモードで一時解除可）と L2 ハードレッドライン（ディスク消去、起動項目改変、hosts 変更、Launcher 自身の改変、ランサムウェア類は解除不可）。サンドボックスはリスクを大幅に低減しますが、100% の攻撃を防げるわけではありません。重要データのフォルダで未知のツールを実行しないでください。",
+        "checkbox": "上記規約を読んで同意します",
+        "next": "次へ"
+      },
+      "step3": {
+        "title": "既定 CLI を選択",
+        "body": "よく使う CLI を選んでください（後から変更可能）。",
+        "claude": "Claude Code",
+        "codex": "Codex CLI",
+        "next": "次へ"
+      },
+      "step4": {
+        "title": "完了",
+        "body": "初期設定が完了しました。ホーム画面のボタンからツールのインストール、プロファイル切替、CLI 起動が行えます。",
+        "finish": "はじめる"
+      }
+    }
+  },
+  "launcherHome": {
+    "title": "ランチャー — CC Launcher のワンストップ設定",
+    "subtitle": "1 → 5 の順にステップを進めると、CC Launcher で Agent CLI を切替・起動できます。",
+    "openStep": "開く",
+    "completion": "すべてのステップ完了後、CC Launcher のノード切替ホームへ戻ります。",
+    "skip": "スキップして CC Launcher のノード切替へ",
+    "steps": {
+      "systemCheck": {
+        "title": "システム検査",
+        "desc": "OS / CPU / Node / Git / ネットワークなど 17 項目をスキャン"
+      },
+      "sandbox": {
+        "title": "サンドボックス",
+        "desc": "L1 ソフトブロックと L2 ハードレッドラインの安全ポリシーを確認"
+      },
+      "install": {
+        "title": "インストール",
+        "desc": "Claude Code / Codex CLI などの Agent ツールをワンクリック導入"
+      },
+      "profile": {
+        "title": "プロファイル",
+        "desc": "各 CLI 用に MCP / Skills / Provider のバンドルを作成・有効化"
+      },
+      "launch": {
+        "title": "起動",
+        "desc": "システムターミナルで選択した CLI を立ち上げます"
+      }
+    }
+  },
+  "launcherStep": {
+    "next": "次へ：{{label}}",
+    "completeAndEnterProviders": "完了してノード切替へ",
+    "completeFailed": "オンボーディング完了に失敗しました。再試行してください",
+    "nextLabel": {
+      "sandbox": "サンドボックス",
+      "install": "インストール",
+      "profile": "プロファイル",
+      "launch": "起動",
+      "providers": "ノード切替"
+    }
   }
 }

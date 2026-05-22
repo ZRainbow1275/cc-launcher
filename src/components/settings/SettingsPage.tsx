@@ -9,6 +9,7 @@ import {
   ScrollText,
   HardDriveDownload,
   FlaskConical,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -25,6 +26,13 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { settingsApi } from "@/lib/api";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
@@ -55,6 +63,44 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   onImportSuccess?: () => void | Promise<void>;
   defaultTab?: string;
+}
+
+/**
+ * Fallback placeholder shown when the underlying cc-switch settings IPC
+ * (`get_settings`, `is_portable_mode`, OAuth account list, …) is unavailable —
+ * i.e. running under `VITE_MOCK_IPC=1` or before the Rust backend has spun up.
+ * Renders an informative empty-state card per tab so the tab never appears
+ * blank to the user.
+ */
+interface SettingsTabFallbackProps {
+  title: string;
+  description: string;
+  footerNote: string;
+}
+
+function SettingsTabFallback({
+  title,
+  description,
+  footerNote,
+}: SettingsTabFallbackProps) {
+  return (
+    <Card data-testid="settings-tab-fallback" className="glass-card">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+            <Info className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle className="text-base">{title}</CardTitle>
+            <CardDescription className="text-sm">{description}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground">{footerNote}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function SettingsPage({
@@ -252,7 +298,21 @@ export function SettingsPage({
                       }
                     />
                   </motion.div>
-                ) : null}
+                ) : (
+                  <SettingsTabFallback
+                    title={t("settings.fallback.general.title", {
+                      defaultValue: "通用配置",
+                    })}
+                    description={t("settings.fallback.general.description", {
+                      defaultValue:
+                        "管理语言 / 主题 / 应用可见性 / 技能存储位置 / 窗口与终端等基础偏好。",
+                    })}
+                    footerNote={t("settings.fallback.note", {
+                      defaultValue:
+                        "等待与后端 IPC 接通后可编辑（当前运行于 Mock 模式）",
+                    })}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="proxy" className="space-y-6 mt-0 pb-4">
@@ -261,18 +321,48 @@ export function SettingsPage({
                     settings={settings}
                     onAutoSave={handleAutoSave}
                   />
-                ) : null}
+                ) : (
+                  <SettingsTabFallback
+                    title={t("settings.fallback.proxy.title", {
+                      defaultValue: "路由配置",
+                    })}
+                    description={t("settings.fallback.proxy.description", {
+                      defaultValue:
+                        "管理本地路由总开关、各应用代理接管、故障转移及全局代理。",
+                    })}
+                    footerNote={t("settings.fallback.note", {
+                      defaultValue:
+                        "等待与后端 IPC 接通后可编辑（当前运行于 Mock 模式）",
+                    })}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="auth" className="space-y-6 mt-0 pb-4">
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-6"
-                >
-                  <AuthCenterPanel />
-                </motion.div>
+                {settings ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <AuthCenterPanel />
+                  </motion.div>
+                ) : (
+                  <SettingsTabFallback
+                    title={t("settings.fallback.auth.title", {
+                      defaultValue: "认证中心",
+                    })}
+                    description={t("settings.fallback.auth.description", {
+                      defaultValue:
+                        "管理 GitHub Copilot 与 ChatGPT (Codex OAuth) 账号登录、刷新与切换。",
+                    })}
+                    footerNote={t("settings.fallback.note", {
+                      defaultValue:
+                        "等待与后端 IPC 接通后可编辑（当前运行于 Mock 模式）",
+                    })}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-6 mt-0 pb-4">
@@ -461,7 +551,21 @@ export function SettingsPage({
                       </AccordionItem>
                     </Accordion>
                   </motion.div>
-                ) : null}
+                ) : (
+                  <SettingsTabFallback
+                    title={t("settings.fallback.advanced.title", {
+                      defaultValue: "高级",
+                    })}
+                    description={t("settings.fallback.advanced.description", {
+                      defaultValue:
+                        "管理配置目录、导入/导出、备份与恢复、WebDAV 云同步、模型测试与日志配置。",
+                    })}
+                    footerNote={t("settings.fallback.note", {
+                      defaultValue:
+                        "等待与后端 IPC 接通后可编辑（当前运行于 Mock 模式）",
+                    })}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="about" className="mt-0">

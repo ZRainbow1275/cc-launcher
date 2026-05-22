@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "CC Switch",
-    "description": "All-in-One Assistant for Claude Code, Codex & Gemini CLI"
+    "title": "CC Launcher",
+    "description": "Agent CLI Launcher — All-in-One Assistant for Claude Code, Codex & Gemini CLI"
   },
   "common": {
     "add": "Add",
@@ -43,7 +43,7 @@
     "notSet": "Not Set"
   },
   "firstRunNotice": {
-    "title": "Welcome to CC Switch",
+    "title": "Welcome to CC Launcher",
     "bodyDefault": "CC Switch lets you switch between multiple Claude Code / Codex / Gemini CLI providers with a single click. If you already had these tools configured, CC Switch has saved your existing setup as a provider named “default” so none of your previous configuration is lost.",
     "bodyOfficial": "An “Official” preset is also included in the list — click it any time you want to switch back to the official default. CC Switch automatically backs up your current config to “default” before switching, so you can move back and forth freely. That's how CC Switch works 😊",
     "confirm": "Got it"
@@ -306,6 +306,25 @@
     "tabAuth": "Auth",
     "tabAdvanced": "Advanced",
     "tabProxy": "Routing",
+    "fallback": {
+      "note": "Editable once the backend IPC is wired up (currently running in Mock mode)",
+      "general": {
+        "title": "General",
+        "description": "Manage language / theme / app visibility / skill storage location / window & terminal preferences."
+      },
+      "proxy": {
+        "title": "Routing",
+        "description": "Manage local routing toggle, per-app proxy takeover, failover and global proxy."
+      },
+      "auth": {
+        "title": "Authentication Center",
+        "description": "Manage GitHub Copilot and ChatGPT (Codex OAuth) account login, refresh and switching."
+      },
+      "advanced": {
+        "title": "Advanced",
+        "description": "Manage config directory, import/export, backup & restore, WebDAV cloud sync, model testing and log configuration."
+      }
+    },
     "authCenter": {
       "title": "OAuth Authentication Center",
       "description": "Use your other subscriptions in Claude Code — please be mindful of compliance risks.",
@@ -2629,5 +2648,620 @@
     "expiredHint": "Run the {{tool}} command to refresh your login",
     "queryFailed": "Query failed",
     "refresh": "Refresh"
+  },
+  "sandbox": {
+    "title": "Sandbox Settings",
+    "subtitle": "L1 soft blocks are unlockable, L2 redlines are permanent",
+    "level": {
+      "title": "Sandbox Level",
+      "description": "Default block strength applied when launching CLIs",
+      "strict": "Strict",
+      "strictDesc": "Block all L1 soft rules + all L2 redlines",
+      "medium": "Medium",
+      "mediumDesc": "Block only L2 redlines, L1 warns but does not block",
+      "confirmTitle": "Switch sandbox level",
+      "confirmMessage": "Switching the sandbox level affects all CLI launches and configured profiles. Continue?",
+      "changed": "Sandbox level switched to {{level}}",
+      "changeFailed": "Failed to switch sandbox level: {{error}}"
+    },
+    "l1": {
+      "title": "L1 Soft Blocks — Unlockable but risky",
+      "description": "These rules can be temporarily unlocked for 24 hours, but the AI may then perform dangerous operations in your project.",
+      "empty": "No rules available",
+      "loading": "Loading...",
+      "loadError": "Failed to load L1 rules: {{error}}",
+      "permanentLock": "This rule cannot be unlocked",
+      "unlockButton": "Unlock this rule",
+      "relockButton": "Re-lock",
+      "statusEnabled": "Enabled",
+      "statusDisabled": "Disabled",
+      "statusUnlocked": "🔓 Unlocked, {{hours}}h remaining",
+      "statusUnlockedLessThanHour": "🔓 Unlocked (<1h)",
+      "toggleSuccess": "Rule state updated",
+      "toggleFailed": "Failed to update rule: {{error}}",
+      "relockSuccess": "Rule re-locked",
+      "rm_arbitrary": {
+        "title": "rm -rf arbitrary path",
+        "desc": "Prevents AI from running rm -rf on paths outside the project directory",
+        "risk1": "I understand all project files may be deleted",
+        "risk2": "I understand this can corrupt the git working tree and history",
+        "risk3": "I take responsibility for any data loss"
+      },
+      "write_outside_cwd": {
+        "title": "Write outside working directory",
+        "desc": "Prevents AI from writing to ~, /, C:/ and other non-cwd paths",
+        "risk1": "I understand the AI may overwrite system files",
+        "risk2": "I understand this may pollute the home directory",
+        "risk3": "I take responsibility for any system damage"
+      },
+      "sudo_runas": {
+        "title": "sudo / runas privilege escalation",
+        "desc": "Prevents AI from elevating privileges via sudo or runas",
+        "risk1": "I understand elevated AI can modify any system file",
+        "risk2": "I understand this can bypass all OS sandboxing",
+        "risk3": "I take responsibility for any security incident"
+      },
+      "curl_pipe_sh": {
+        "title": "curl | sh remote execution",
+        "desc": "Prevents AI from piping curl output directly into a shell",
+        "risk1": "I understand remote scripts may contain malicious code",
+        "risk2": "I understand this is equivalent to running unaudited binaries",
+        "risk3": "I take responsibility for any compromise"
+      },
+      "claude_skip_permissions": {
+        "title": "Claude --dangerously-skip-permissions",
+        "desc": "Claude Code CLI flag that disables permission checks; permanently locked"
+      },
+      "codex_yolo": {
+        "title": "Codex --yolo / bypass approvals",
+        "desc": "Codex CLI flag that bypasses all approvals and sandboxing; permanently locked"
+      },
+      "network_revshell": {
+        "title": "Network reverse shell",
+        "desc": "bash -i >& /dev/tcp/ and other reverse shell patterns; permanently locked"
+      }
+    },
+    "l2": {
+      "title": "L2 Hard Redlines — Permanently Blocked",
+      "description": "Regardless of sandbox level or any action you take, these patterns are always blocked.",
+      "permanentLockBadge": "🔒 Permanently Blocked",
+      "whyLink": "Learn why",
+      "matchType": {
+        "regex": "Regex",
+        "substring": "Substring"
+      },
+      "loading": "Loading...",
+      "loadError": "Failed to load L2 redlines: {{error}}",
+      "category": {
+        "DiskWipe": "Disk Wipe",
+        "BootCritical": "Boot / Startup",
+        "HostsFile": "Hosts File",
+        "LauncherSelf": "Launcher Self-modification",
+        "ReverseShell": "Reverse Shell",
+        "Ransomware": "Ransomware",
+        "SudoDestructive": "Privileged Destruction",
+        "CwdSystemRoot": "Working dir = system root"
+      },
+      "disk_wipe": {
+        "rm_root": "rm -rf / — wipe root",
+        "rm_home": "rm -rf ~ — wipe home directory",
+        "del_root": "del C:\\* — wipe drive root",
+        "format": "format / mkfs / wipefs — disk format",
+        "dd_device": "dd of=/dev/sd* — raw write to block device"
+      },
+      "boot": {
+        "win_run_key": "Write Windows Run registry key",
+        "launchd": "Write to macOS LaunchDaemons"
+      },
+      "hosts": {
+        "unix": "Modify Unix /etc/hosts",
+        "windows": "Modify Windows hosts file"
+      },
+      "launcher": {
+        "cc_switch_dir": "Modify Launcher itself (~/.cc-switch)"
+      },
+      "revshell": {
+        "bash_tcp": "bash -i reverse TCP shell",
+        "nc_e": "nc -e reverse shell"
+      },
+      "sudo": {
+        "rm_root": "sudo rm -rf / — privileged wipe",
+        "dd_disk": "sudo dd if= — privileged disk write"
+      },
+      "registry": {
+        "run_value": "REG ADD HKLM ...Run — boot autorun"
+      },
+      "cli": {
+        "dangerously_skip": "--dangerously-skip-permissions CLI flag"
+      }
+    },
+    "platform": {
+      "windows": "Windows Claude Code has no built-in OS sandbox; 5/8 redlines are enforced by Launcher's own Job Object + Restricted Token + DACL.",
+      "macos": "macOS uses sandbox-exec profile + Hardened Runtime for layered protection.",
+      "linux": "Linux uses namespaces + seccomp + AppArmor/SELinux."
+    },
+    "confirm": {
+      "title": "Unlock dangerous rule",
+      "step": "Step {{current}} of 3",
+      "step1Title": "Are you sure you want to unlock this rule?",
+      "step1Lead": "Once unlocked, the AI may perform the following dangerous operations in your project:",
+      "step1Continue": "I understand the risk, continue",
+      "step2Title": "Please confirm the risk acknowledgments",
+      "step2Lead": "You must explicitly agree to all 3 items below before continuing:",
+      "step3Title": "Type the keyword to confirm",
+      "step3Lead": "Type the keyword below to finalize. Case-sensitive, must match exactly.",
+      "step3Keyword": "Keyword",
+      "step3Placeholder": "Type the keyword above, character by character",
+      "step3Submit": "Unlock this rule for 24h",
+      "submitting": "Unlocking...",
+      "back": "Back",
+      "next": "Continue",
+      "cancel": "Cancel",
+      "unlocked": "Unlocked. Will re-lock automatically in 24 hours.",
+      "unlockFailed": "Unlock failed: {{error}}",
+      "keywordZh": "我已知晓",
+      "keywordEn": "I UNDERSTAND",
+      "keywordJa": "理解しました"
+    },
+    "docLink": {
+      "windows": "docs/env-setup-windows-zh.md#section-7",
+      "macos": "docs/env-setup-macos-zh.md#section-7"
+    }
+  },
+  "shell": {
+    "brandTagline": "Agent CLI Launcher",
+    "launcherEntry": "Launcher",
+    "nav": {
+      "home": "Launcher",
+      "install": "Install",
+      "profile": "Profile",
+      "launch": "Launch",
+      "switch": "Switch Node",
+      "systemcheck": "System Check",
+      "sandbox": "Sandbox"
+    },
+    "modeSwitch": {
+      "title": "UI Mode",
+      "novice": "Novice",
+      "expert": "Expert",
+      "noviceHint": "Novice mode: only core actions are shown.",
+      "expertHint": "Expert mode: all advanced panels are visible.",
+      "confirmTitle": "Confirm mode switch",
+      "confirmNoviceToExpert": "Switching to expert mode unlocks all advanced panels and may impact the CLI if used incorrectly. Continue?",
+      "confirmExpertToNovice": "Switching back to novice mode hides expert panels (data is preserved). Continue?",
+      "switchedTo": {
+        "novice": "Switched to novice mode",
+        "expert": "Switched to expert mode"
+      },
+      "switchFailed": "Failed to switch mode: {{error}}"
+    },
+    "noviceStub": {
+      "title": "Novice Home",
+      "subtitle": "NoviceHome placeholder — to be implemented in A3",
+      "description": "The novice home (Install CLI / Configure profile / Launch CLI) will be implemented by task A3."
+    }
+  },
+  "launcher": {
+    "title": "Launch CLI",
+    "subtitle": "Pick terminal → confirm safety → launch in one click",
+    "activeProfile": {
+      "empty": "No active profile yet",
+      "emptyHint": "Create and activate a profile in the Profile Manager before launching.",
+      "createLink": "Go to Profile Manager",
+      "header": "Active profile",
+      "providerLabel": "Provider",
+      "providerEmpty": "unset",
+      "mcpCount": "MCP {{count}}",
+      "skillsCount": "Skills {{count}}",
+      "noProvider": "(no provider)"
+    },
+    "terminal": {
+      "title": "Pick system terminal",
+      "subtitle": "Launcher invokes the system terminal — no embedded pseudo-terminal.",
+      "available": "available",
+      "unavailable": "not installed",
+      "recommended": "recommended",
+      "version": "version {{version}}",
+      "pathLabel": "Path",
+      "empty": "No system terminal detected"
+    },
+    "workdir": {
+      "title": "Working directory (CWD)",
+      "subtitle": "L2 hard redline: the CLI process is locked to this directory.",
+      "path": "{{path}}",
+      "absoluteLabel": "Absolute path",
+      "open": "Open folder",
+      "opening": "Opening...",
+      "openSuccess": "Working directory opened",
+      "openFailed": "Failed to open working directory",
+      "resetDisabled": "Reset working directory",
+      "resetTooltip": "L2 redline: CWD escape is permanently disabled"
+    },
+    "safety": {
+      "title": "Safety configuration for this launch",
+      "subtitle": "Expand to see the actual safety flags and redlines Launcher injects into the CLI.",
+      "flags": "CLI safety launch flags",
+      "flagsHintClaude": "Claude Code safe mode: disable yolo, isolate MCP, limit writable dirs, append the official safety prompt.",
+      "flagsHintCodex": "Codex uses native [profiles.<name>] with 1:1 mapping.",
+      "cwd": "CWD lock path",
+      "l1Count": "L1 soft rules: {{count}} active",
+      "l2Count": "L2 hard redlines: {{count}} never disable-able",
+      "loading": "Loading..."
+    },
+    "launchButton": "Launch",
+    "launching": "Spawning terminal...",
+    "success": {
+      "title": "CLI launched in {{terminal}}",
+      "body": "Profile: {{profile}} | CWD: {{cwd}}",
+      "checkTaskbar": "If no window appears, check the taskbar."
+    },
+    "error": {
+      "title": "Launch failed",
+      "nodeMissing": "Node runtime not detected. Cannot launch CLI.",
+      "cliMissing": "{{cli}} CLI not detected. Please install it via the Installer Wizard.",
+      "profileInvalid": "Profile is broken: {{detail}}",
+      "terminalNotFound": "Selected terminal is unavailable. Please re-select.",
+      "unknown": "Unknown error: {{detail}}",
+      "fixLink": "Open Installer Wizard",
+      "fixProfileLink": "Open Profile Manager",
+      "close": "Close"
+    },
+    "disabledReason": {
+      "noProfile": "Activate a profile in the Profile Manager first",
+      "noTerminal": "Pick an available system terminal first",
+      "launching": "Launching..."
+    }
+  },
+  "profile": {
+    "manager": {
+      "title": "Profile Manager"
+    },
+    "cli": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
+    "list": {
+      "title": "{{cli}} profiles",
+      "createButton": "New profile",
+      "empty": "No profile yet. Click \"+ New profile\" to begin.",
+      "active": "Active",
+      "builtin": "Built-in",
+      "switchTo": "Switch to",
+      "switchToCurrent": "Currently active",
+      "providerBadge": "Provider: {{name}}",
+      "providerEmpty": "unset",
+      "mcpBadge": "MCP: {{count}}",
+      "skillBadge": "Skills: {{count}}",
+      "cannotDeleteBuiltin": "Built-in profile cannot be deleted",
+      "cannotDeleteActive": "Switch to another profile before deleting",
+      "cannotDeleteLast": "At least one editable profile must remain"
+    },
+    "editor": {
+      "titleCreate": "New profile",
+      "titleEdit": "Edit profile",
+      "subtitle": "{{cli}} configuration",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Work / Experimental",
+      "descriptionLabel": "Description",
+      "iconLabel": "Icon",
+      "iconColorLabel": "Icon color",
+      "providerLabel": "Provider",
+      "providerPlaceholder": "Select provider",
+      "providerEmpty": "(unset)",
+      "mcpLabel": "MCP subset",
+      "mcpEmpty": "No MCP available",
+      "mcpEnabledHint": "Enabled for this CLI",
+      "skillsLabel": "Skills subset",
+      "skillsEmpty": "No Skill available",
+      "settingsLabel": "settings.json overlay (JSON object)",
+      "errors": {
+        "nameRequired": "Name is required",
+        "settingsInvalidJson": "Invalid JSON",
+        "settingsMustBeObject": "settings.json must be a JSON object"
+      }
+    },
+    "switch": {
+      "title": "Switch profile preview",
+      "subtitle": "{{from}} → {{to}}",
+      "none": "(none)",
+      "unchanged": "No changes",
+      "providerSection": "Provider",
+      "mcpSection": "MCP diff",
+      "skillsSection": "Skills diff",
+      "settingsSection": "settings.json diff",
+      "confirm": "Confirm switch",
+      "switching": "Switching...",
+      "retry": "Retry",
+      "failureTitle": "Switch failed",
+      "failureUnknown": "Unknown error",
+      "backupDir": "Backup directory"
+    },
+    "delete": {
+      "title": "Delete profile",
+      "message": "Delete profile \"{{name}}\"? This cannot be undone."
+    },
+    "toast": {
+      "createSuccess": "Profile created: {{name}}",
+      "updateSuccess": "Profile updated: {{name}}",
+      "switchSuccess": "Switched successfully",
+      "deleteSuccess": "Profile deleted",
+      "deleteFailed": {
+        "BUILTIN_PROFILE_PROTECTED": "Built-in profile cannot be deleted",
+        "PROFILE_IS_ACTIVE": "Cannot delete the currently active profile",
+        "PROFILE_NOT_FOUND": "Profile not found"
+      }
+    }
+  },
+  "systemCheck": {
+    "title": "System Check",
+    "subtitle": "17 live probes with one-click fixes",
+    "lastUpdated": "Last updated: {{time}}",
+    "overall": {
+      "green": "All clear — ready to launch",
+      "yellow": "Some items could be improved",
+      "red": "Critical items need to be fixed",
+      "missing": "Critical items need to be fixed",
+      "unknown": "Probe has not finished yet"
+    },
+    "counts": {
+      "green": "green",
+      "yellow": "yellow",
+      "red": "red",
+      "unknown": "unknown"
+    },
+    "groups": {
+      "system": "System Resources",
+      "runtime": "Runtime",
+      "env": "Environment & Permissions",
+      "network": "Network",
+      "workdir": "Work Directory"
+    },
+    "actions": {
+      "reprobe": "Re-probe",
+      "fixAll": "Fix all ({{count}})",
+      "fix": "Fix",
+      "learnMore": "Learn more",
+      "collapse": "Collapse",
+      "expand": "Expand"
+    },
+    "summary": {
+      "title": "System Check",
+      "label": "System Check: green {{green}} / yellow {{yellow}} / red {{red}}"
+    },
+    "error": {
+      "fetch": "Failed to load the probe report. Please retry."
+    },
+    "fix": {
+      "target": "Target",
+      "batchRemaining": "{{count}} more item(s) queued",
+      "next": "Next",
+      "retry": "Retry",
+      "cannotCancel": "This step cannot be cancelled",
+      "toast": {
+        "success": "Fix completed",
+        "failed": "Fix failed"
+      },
+      "phase": {
+        "idle": "Preparing…",
+        "starting": "Starting…",
+        "running": "Running…",
+        "validating": "Validating…",
+        "completed": "Completed",
+        "failed": "Failed"
+      },
+      "installNode": {
+        "title": "Install Node.js",
+        "description": "Installs Node.js LTS into a private runtime — does not affect existing system Node."
+      },
+      "installGit": {
+        "title": "Install Git",
+        "description": "Installs Git on your machine for version control support."
+      },
+      "cleanEnvVar": {
+        "title": "Clean conflicting env vars",
+        "description": "Removes env vars that conflict with CLIs. Backed up automatically and reversible."
+      },
+      "openHomeDir": {
+        "title": "Open home directory",
+        "description": "Opens your home folder to help free up disk space (no files are modified)."
+      },
+      "injectPathEntries": {
+        "title": "Inject PATH entries",
+        "description": "Adds required PATH entries to launcher subprocesses only — system config is untouched."
+      },
+      "externalLink": {
+        "title": "View instructions",
+        "description": "Opens the related documentation page."
+      }
+    }
+  },
+  "installer": {
+    "title": "CLI Installer Wizard",
+    "subtitle": "Set up the private Node.js runtime and install Claude Code / Codex CLI",
+    "steps": {
+      "systemCheck": {
+        "title": "System self-check"
+      },
+      "node": {
+        "title": "Node.js runtime"
+      },
+      "select": {
+        "title": "Select CLIs"
+      },
+      "install": {
+        "title": "Install & validate"
+      }
+    },
+    "nav": {
+      "back": "Back",
+      "next": "Next",
+      "finish": "Finish"
+    },
+    "step1": {
+      "redBlocks": "Red-light items must be resolved first. Open the system check to fix them.",
+      "yellowWarn": "Some yellow warnings remain — you may continue, but review them later.",
+      "continue": "All clear. You may proceed."
+    },
+    "step2": {
+      "detecting": "Detecting Node.js…",
+      "ready": "Ready: {{version}}",
+      "missing": "Node 20 LTS will be installed into a private directory",
+      "installNote": "CC Launcher installs Node 20 LTS into an isolated directory without polluting system PATH.",
+      "installButton": "Install Node",
+      "installing": "Installing Node…",
+      "pathLabel": "Private runtime path",
+      "uninstallNote": "Uninstalling CC Launcher removes this directory automatically"
+    },
+    "step3": {
+      "title": "Select CLIs to install",
+      "description": "Tick the Agent CLIs you want. Already-installed CLIs are pre-checked for validation.",
+      "claude": "Claude Code",
+      "codex": "Codex CLI",
+      "installed": "Installed",
+      "confirm": "Next: Start install",
+      "noneSelected": "Pick at least one CLI before continuing"
+    },
+    "step4": {
+      "registryPicker": {
+        "title": "Registry probe",
+        "subtitle": "Probe 4 npm mirrors in parallel and auto-select the fastest",
+        "probe": "Re-probe",
+        "probing": "Probing…",
+        "latency": "{{ms}} ms",
+        "fastest": "Fastest",
+        "manual": "Manual registry",
+        "manualPlaceholder": "https://...",
+        "allFailed": "All mirrors unreachable. Check network or VPN.",
+        "retry": "Retry",
+        "note": "Tencent mirror returns 404 on root in some environments; auto-skipped",
+        "select": "Use this source",
+        "confirmSelection": "Continue with selected mirror",
+        "rowFailed": "Failed",
+        "rowTimeout": "Timeout",
+        "rowOk": "OK",
+        "rowUnknown": "Unknown"
+      },
+      "progress": {
+        "phase": "Phase",
+        "speed": "{{kbps}} KB/s",
+        "bytes": "{{loaded}} / {{total}} KB",
+        "cancel": "Cancel",
+        "success": "{{cli}} installed v{{version}}",
+        "error": "{{cli}} install failed",
+        "cleaned": "Cleanup completed automatically",
+        "retry": "Retry",
+        "retryDifferent": "Retry with another mirror",
+        "current": "Working on: {{cli}}"
+      },
+      "allDone": "All selected CLIs installed. Moving to management view."
+    },
+    "cardView": {
+      "title": "CLI Management",
+      "subtitle": "Installed Agent CLIs, version and profile count",
+      "installed": "Installed",
+      "notInstalled": "Not installed",
+      "installing": "Installing",
+      "version": "Version",
+      "profileCount": "{{count}} profiles",
+      "noProfile": "No profiles yet",
+      "uninstall": "Uninstall",
+      "uninstallConfirmTitle": "Uninstall {{cli}}?",
+      "uninstallConfirm": "This removes the private node_modules and .bin symlink for {{cli}}. Cannot be undone.",
+      "viewProfiles": "View profiles",
+      "installNow": "Install now",
+      "reinstall": "Open wizard again"
+    }
+  },
+  "novice": {
+    "title": "CC Launcher",
+    "buttons": {
+      "install": "Install Tools",
+      "installSubtitle": "Auto-install Claude Code / Codex and other CLIs",
+      "switchProfile": "Switch Profile",
+      "switchProfileSubtitle": "Pick / switch your MCP, Skills and Provider bundle",
+      "switchProfileDisabledReason": "Install a CLI first to configure a Profile",
+      "launch": "Launch",
+      "launchSubtitle": "Spawn the selected CLI in your system terminal",
+      "launchDisabledNoCli": "Install a CLI first",
+      "launchDisabledNoProfile": "Create a Profile first"
+    },
+    "statusBar": {
+      "profile": "Profile",
+      "sandbox": "Sandbox",
+      "system": "System",
+      "noProfile": "None",
+      "sandboxLevel": {
+        "strict": "Strict",
+        "medium": "Medium"
+      }
+    },
+    "onboarding": {
+      "title": "Welcome to CC Launcher",
+      "step1": {
+        "title": "Welcome",
+        "body": "CC Launcher installs and launches Agent CLIs like Claude Code and Codex with one click. The next 4 steps take you through first-time setup—no command line knowledge required.",
+        "next": "Next"
+      },
+      "step2": {
+        "title": "Security Terms",
+        "body": "Please read and accept the safety terms so you understand the sandbox boundaries.",
+        "terms": "CC Launcher protects you with two layers: L1 soft blocks (rm -rf, sudo, risky CLI flags — temporarily unlockable in Expert mode) and L2 hard redlines (disk wipe, boot-critical edits, hosts file, Launcher self-modification, ransomware patterns — never disabled). The sandbox greatly reduces risk but cannot stop 100% of attacks; do not run unknown tools against your important data folders.",
+        "checkbox": "I have read and accept the terms above",
+        "next": "Next"
+      },
+      "step3": {
+        "title": "Pick Default CLI",
+        "body": "Choose the CLI you use most often (changeable later).",
+        "claude": "Claude Code",
+        "codex": "Codex CLI",
+        "next": "Next"
+      },
+      "step4": {
+        "title": "All Set",
+        "body": "First-time setup is complete. Use the home buttons to install tools, switch profiles, or launch a CLI.",
+        "finish": "Get Started"
+      }
+    }
+  },
+  "launcherHome": {
+    "title": "Launcher — One-stop setup for CC Launcher",
+    "subtitle": "Walk steps 1 → 5 to be ready for switching and launching Agent CLIs inside CC Launcher.",
+    "openStep": "Open",
+    "completion": "After completing all steps, you'll return to the CC Launcher node-switching home.",
+    "skip": "Skip and jump straight to CC Launcher node switching",
+    "steps": {
+      "systemCheck": {
+        "title": "System Check",
+        "desc": "Scan 17 baseline probes: OS / CPU / Node / Git / network …"
+      },
+      "sandbox": {
+        "title": "Sandbox",
+        "desc": "Confirm L1 soft-intercept rules and the L2 hard-redline policy"
+      },
+      "install": {
+        "title": "Install",
+        "desc": "One-click install Claude Code / Codex CLI and other Agent tools"
+      },
+      "profile": {
+        "title": "Profile",
+        "desc": "Create and activate per-CLI bundles of MCP / Skills / Provider"
+      },
+      "launch": {
+        "title": "Launch",
+        "desc": "Spawn the chosen CLI inside your system terminal"
+      }
+    }
+  },
+  "launcherStep": {
+    "next": "Next: {{label}}",
+    "completeAndEnterProviders": "Finish & enter node switching",
+    "completeFailed": "Failed to complete onboarding — please retry",
+    "nextLabel": {
+      "sandbox": "Sandbox",
+      "install": "Install",
+      "profile": "Profile",
+      "launch": "Launch",
+      "providers": "Node switching"
+    }
   }
 }

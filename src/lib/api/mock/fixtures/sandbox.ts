@@ -1,0 +1,206 @@
+import type { L1Rule, L2Redline } from "../../contracts";
+
+const baseTime = "2026-05-22T10:00:00.000Z";
+
+export function defaultL1Rules(): L1Rule[] {
+  return [
+    {
+      id: "L1.rm_arbitrary",
+      category: "DangerousFilesystem",
+      pattern: "^rm\\s+-[rf]+\\s+[^./~\\s]",
+      titleKey: "sandbox.l1.rm_arbitrary.title",
+      descriptionKey: "sandbox.l1.rm_arbitrary.desc",
+      enabled: true,
+      unlockable: true,
+      unlockedUntil: null,
+      updatedAt: baseTime,
+    },
+    {
+      id: "L1.write_outside_cwd",
+      category: "DangerousFilesystem",
+      pattern: "(?i)>\\s*[/~]|>\\s*[a-z]:",
+      titleKey: "sandbox.l1.write_outside_cwd.title",
+      descriptionKey: "sandbox.l1.write_outside_cwd.desc",
+      enabled: true,
+      unlockable: true,
+      unlockedUntil: null,
+      updatedAt: baseTime,
+    },
+    {
+      id: "L1.sudo_runas",
+      category: "PrivilegeEscalation",
+      pattern: "^(sudo\\b|runas\\s+/user)",
+      titleKey: "sandbox.l1.sudo_runas.title",
+      descriptionKey: "sandbox.l1.sudo_runas.desc",
+      enabled: true,
+      unlockable: true,
+      unlockedUntil: null,
+      updatedAt: baseTime,
+    },
+    {
+      id: "L1.curl_pipe_sh",
+      category: "SuspiciousCommand",
+      pattern: "curl\\s+[^|]+\\|\\s*(sh|bash|zsh)",
+      titleKey: "sandbox.l1.curl_pipe_sh.title",
+      descriptionKey: "sandbox.l1.curl_pipe_sh.desc",
+      enabled: true,
+      unlockable: true,
+      unlockedUntil: null,
+      updatedAt: baseTime,
+    },
+    {
+      id: "L1.claude_skip_permissions",
+      category: "CliRiskyFlag",
+      pattern: "--dangerously-skip-permissions\\b",
+      titleKey: "sandbox.l1.claude_skip_permissions.title",
+      descriptionKey: "sandbox.l1.claude_skip_permissions.desc",
+      enabled: true,
+      unlockable: false,
+      unlockedUntil: null,
+      updatedAt: baseTime,
+    },
+    {
+      id: "L1.codex_yolo",
+      category: "CliRiskyFlag",
+      pattern: "--dangerously-bypass-approvals-and-sandbox|--yolo\\b",
+      titleKey: "sandbox.l1.codex_yolo.title",
+      descriptionKey: "sandbox.l1.codex_yolo.desc",
+      enabled: true,
+      unlockable: false,
+      unlockedUntil: null,
+      updatedAt: baseTime,
+    },
+    {
+      id: "L1.network_revshell",
+      category: "NetworkExposure",
+      pattern: "bash\\s+-i\\s+>&?\\s+/dev/tcp/",
+      titleKey: "sandbox.l1.network_revshell.title",
+      descriptionKey: "sandbox.l1.network_revshell.desc",
+      enabled: true,
+      unlockable: false,
+      unlockedUntil: null,
+      updatedAt: baseTime,
+    },
+  ];
+}
+
+export function l2Redlines(): L2Redline[] {
+  return [
+    {
+      id: "disk_wipe.rm_root",
+      category: "DiskWipe",
+      pattern:
+        "(?i)^rm\\s+(-[a-z]*r[a-z]*f[a-z]*|-[a-z]*f[a-z]*r[a-z]*)\\s+/\\s*$",
+      descriptionKey: "sandbox.l2.disk_wipe.rm_root",
+      matchType: "regex",
+    },
+    {
+      id: "disk_wipe.rm_home",
+      category: "DiskWipe",
+      pattern:
+        "(?i)^rm\\s+-[rf]+\\s+(~|\\$HOME|/Users/[^/\\s]+|/home/[^/\\s]+)\\s*$",
+      descriptionKey: "sandbox.l2.disk_wipe.rm_home",
+      matchType: "regex",
+    },
+    {
+      id: "disk_wipe.del_root",
+      category: "DiskWipe",
+      pattern: "(?i)\\bdel\\b.*\\b[a-z]:[\\\\/]?\\*",
+      descriptionKey: "sandbox.l2.disk_wipe.del_root",
+      matchType: "regex",
+    },
+    {
+      id: "disk_wipe.format",
+      category: "DiskWipe",
+      pattern: "(?i)\\b(format\\s+[a-z]:|mkfs\\.\\w+|wipefs)\\b",
+      descriptionKey: "sandbox.l2.disk_wipe.format",
+      matchType: "regex",
+    },
+    {
+      id: "disk_wipe.dd_device",
+      category: "DiskWipe",
+      pattern: "(?i)\\bdd\\b.*\\bof=/dev/(sd|nvme|disk|hd)",
+      descriptionKey: "sandbox.l2.disk_wipe.dd_device",
+      matchType: "regex",
+    },
+    {
+      id: "boot.win_run_key",
+      category: "BootCritical",
+      pattern:
+        "(?i)HKEY_(LOCAL_MACHINE|CURRENT_USER)\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run",
+      descriptionKey: "sandbox.l2.boot.win_run_key",
+      matchType: "regex",
+    },
+    {
+      id: "boot.launchd",
+      category: "BootCritical",
+      pattern: "^/(System/)?Library/LaunchDaemons/",
+      descriptionKey: "sandbox.l2.boot.launchd",
+      matchType: "regex",
+    },
+    {
+      id: "hosts.unix",
+      category: "HostsFile",
+      pattern: "^(/etc/hosts|/private/etc/hosts)$",
+      descriptionKey: "sandbox.l2.hosts.unix",
+      matchType: "regex",
+    },
+    {
+      id: "hosts.windows",
+      category: "HostsFile",
+      pattern: "(?i)c:/windows/system32/drivers/etc/hosts$",
+      descriptionKey: "sandbox.l2.hosts.windows",
+      matchType: "regex",
+    },
+    {
+      id: "launcher.cc_switch_dir",
+      category: "LauncherSelf",
+      pattern: "^(~|/Users/[^/]+|/home/[^/]+|c:/users/[^/]+)/\\.cc-switch(/|$)",
+      descriptionKey: "sandbox.l2.launcher.cc_switch_dir",
+      matchType: "regex",
+    },
+    {
+      id: "revshell.bash_tcp",
+      category: "ReverseShell",
+      pattern: "bash\\s+-i\\s+>&?\\s+/dev/tcp/",
+      descriptionKey: "sandbox.l2.revshell.bash_tcp",
+      matchType: "regex",
+    },
+    {
+      id: "revshell.nc_e",
+      category: "ReverseShell",
+      pattern: "\\bnc\\b.*-[lp]?e\\s+(/bin/(ba)?sh|cmd\\.exe)",
+      descriptionKey: "sandbox.l2.revshell.nc_e",
+      matchType: "regex",
+    },
+    {
+      id: "sudo.rm_root",
+      category: "SudoDestructive",
+      pattern: "sudo rm -rf /",
+      descriptionKey: "sandbox.l2.sudo.rm_root",
+      matchType: "substring",
+    },
+    {
+      id: "sudo.dd_disk",
+      category: "SudoDestructive",
+      pattern: "sudo dd if=",
+      descriptionKey: "sandbox.l2.sudo.dd_disk",
+      matchType: "substring",
+    },
+    {
+      id: "registry.run_value",
+      category: "BootCritical",
+      pattern:
+        "REG ADD HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      descriptionKey: "sandbox.l2.registry.run_value",
+      matchType: "substring",
+    },
+    {
+      id: "cli.dangerously_skip",
+      category: "SudoDestructive",
+      pattern: "--dangerously-skip-permissions",
+      descriptionKey: "sandbox.l2.cli.dangerously_skip",
+      matchType: "substring",
+    },
+  ];
+}

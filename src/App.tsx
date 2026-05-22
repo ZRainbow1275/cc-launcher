@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   Settings,
   ArrowLeft,
+  ArrowRight,
   Minus,
   Maximize2,
   Minimize2,
@@ -27,6 +28,7 @@ import {
   Shield,
   Cpu,
   LayoutDashboard,
+  Rocket,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Provider, VisibleApps } from "@/types";
@@ -89,6 +91,13 @@ import ToolsPanel from "@/components/openclaw/ToolsPanel";
 import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
+import { InstallerWizard } from "@/components/installer";
+import { ProfileManager } from "@/components/profile/ProfileManager";
+import { LauncherPanel } from "@/components/launcher";
+import { SystemCheckDashboard } from "@/components/system-check";
+import { SandboxSettings } from "@/components/sandbox/SandboxSettings";
+import { LauncherHomePage } from "@/components/launcher-home";
+import { onboarding } from "@/lib/api/mock";
 
 type View =
   | "providers"
@@ -104,7 +113,134 @@ type View =
   | "openclawEnv"
   | "openclawTools"
   | "openclawAgents"
-  | "hermesMemory";
+  | "hermesMemory"
+  | "launcherHome"
+  | "launcherSystemCheck"
+  | "launcherSandbox"
+  | "launcherInstall"
+  | "launcherProfile"
+  | "launcherLaunch";
+
+const LAUNCHER_VIEWS = [
+  "launcherHome",
+  "launcherSystemCheck",
+  "launcherSandbox",
+  "launcherInstall",
+  "launcherProfile",
+  "launcherLaunch",
+] as const;
+
+type LauncherView = (typeof LAUNCHER_VIEWS)[number];
+
+const LAUNCHER_SEQUENCE: readonly LauncherView[] = [
+  "launcherSystemCheck",
+  "launcherSandbox",
+  "launcherInstall",
+  "launcherProfile",
+  "launcherLaunch",
+] as const;
+
+function isLauncherView(view: View): view is LauncherView {
+  return (LAUNCHER_VIEWS as readonly string[]).includes(view);
+}
+
+function getNextLauncherView(current: LauncherView): View {
+  if (current === "launcherHome") return "launcherSystemCheck";
+  const idx = LAUNCHER_SEQUENCE.indexOf(current);
+  if (idx < 0 || idx >= LAUNCHER_SEQUENCE.length - 1) {
+    return "providers";
+  }
+  return LAUNCHER_SEQUENCE[idx + 1];
+}
+
+function getLauncherNextLabelKey(current: LauncherView): {
+  key: string;
+  defaultValue: string;
+} {
+  switch (current) {
+    case "launcherSystemCheck":
+      return {
+        key: "launcherStep.nextLabel.sandbox",
+        defaultValue: "沙盒",
+      };
+    case "launcherSandbox":
+      return {
+        key: "launcherStep.nextLabel.install",
+        defaultValue: "装机",
+      };
+    case "launcherInstall":
+      return {
+        key: "launcherStep.nextLabel.profile",
+        defaultValue: "Profile",
+      };
+    case "launcherProfile":
+      return {
+        key: "launcherStep.nextLabel.launch",
+        defaultValue: "启动",
+      };
+    case "launcherLaunch":
+      return {
+        key: "launcherStep.nextLabel.providers",
+        defaultValue: "节点切换",
+      };
+    default:
+      return {
+        key: "launcherStep.nextLabel.providers",
+        defaultValue: "节点切换",
+      };
+  }
+}
+
+interface LauncherStepFooterProps {
+  currentView: View;
+  onNext: () => void;
+  isFinalStep?: boolean;
+}
+
+function LauncherStepFooter({
+  currentView,
+  onNext,
+  isFinalStep,
+}: LauncherStepFooterProps) {
+  const { t } = useTranslation();
+  if (!isLauncherView(currentView) || currentView === "launcherHome") {
+    return null;
+  }
+  const { key, defaultValue } = getLauncherNextLabelKey(
+    currentView as LauncherView,
+  );
+  const label = t(key, { defaultValue });
+  const finalLabel = t("launcherStep.completeAndEnterProviders", {
+    defaultValue: "完成并进入节点切换",
+  });
+  const buttonLabel = isFinalStep
+    ? finalLabel
+    : t("launcherStep.next", {
+        defaultValue: "下一步：{{label}}",
+        label,
+      });
+  return (
+    <div
+      data-testid={`launcher-step-footer-${currentView}`}
+      className="mt-6 flex items-center justify-end gap-2 border-t pt-4"
+    >
+      <Button
+        variant="default"
+        size="sm"
+        onClick={onNext}
+        className="gap-2"
+        data-testid={
+          isFinalStep
+            ? "launcher-step-footer-complete"
+            : `launcher-step-footer-next-${currentView}`
+        }
+      >
+        {buttonLabel}
+        <ArrowRight className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+}
 
 interface WebDavSyncStatusUpdatedPayload {
   source?: string;
@@ -150,6 +286,12 @@ const VALID_VIEWS: View[] = [
   "openclawTools",
   "openclawAgents",
   "hermesMemory",
+  "launcherHome",
+  "launcherSystemCheck",
+  "launcherSandbox",
+  "launcherInstall",
+  "launcherProfile",
+  "launcherLaunch",
 ];
 
 const getInitialView = (): View => {
@@ -161,7 +303,7 @@ const getInitialView = (): View => {
 };
 
 function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
@@ -172,9 +314,126 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
+  // Capture the persisted-view flag SYNCHRONOUSLY at first render, before any
+  // effect runs. This is what lets the launcher-first-launch redirect know
+  // whether the current session is a returning user (persisted view) vs a
+  // truly first launch (no localStorage entry yet).
+  const hadPersistedViewOnMountRef = useRef<boolean>(
+    (() => {
+      try {
+        return localStorage.getItem(VIEW_STORAGE_KEY) !== null;
+      } catch {
+        return false;
+      }
+    })(),
+  );
+
   useEffect(() => {
     localStorage.setItem(VIEW_STORAGE_KEY, currentView);
   }, [currentView]);
+
+  // First-launch detection: if there is NO persisted view in localStorage AND
+  // onboarding has not been completed, jump into the launcher SystemCheck
+  // step automatically. Runs ONCE on mount. Returning users with a persisted
+  // view are unaffected; the launcher is still reachable via the 🚀 header
+  // button in the providers view.
+  //
+  // Tests that don't expect this redirect (e.g. tests/integration/App.test.tsx
+  // mounting <App /> with an empty localStorage and asserting that the
+  // provider list shows up) can opt out by either pre-seeding localStorage
+  // with a view OR setting `window.__CC_DISABLE_FIRST_LAUNCH_REDIRECT__ = true`
+  // before mount.
+  useEffect(() => {
+    if (hadPersistedViewOnMountRef.current) {
+      // Returning user — respect their persisted view; do not hijack.
+      return;
+    }
+    if (
+      typeof window !== "undefined" &&
+      (window as unknown as { __CC_DISABLE_FIRST_LAUNCH_REDIRECT__?: boolean })
+        .__CC_DISABLE_FIRST_LAUNCH_REDIRECT__ === true
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const state = await onboarding.get_state();
+        if (cancelled) return;
+        if (!state.completed) {
+          setCurrentView("launcherSystemCheck");
+        }
+      } catch (error) {
+        // onboarding probe failures should never block the existing UI. The
+        // user simply lands on the persisted/default view.
+        console.warn("[App] onboarding.get_state failed:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reactive onboarding state. While `completed === false` the app is "locked"
+  // into the launcher sequence — the user cannot navigate to providers/etc.
+  // until they finish all 5 steps. Queried via TanStack Query so the lock is
+  // released automatically when `onboarding.complete()` invalidates the cache.
+  const onboardingStateQuery = useQuery({
+    queryKey: ["onboarding", "state"],
+    queryFn: () => onboarding.get_state(),
+    // The lock should fail-open: if the probe fails, do NOT block the UI.
+    retry: false,
+    staleTime: 30_000,
+  });
+  const onboardingLocked =
+    onboardingStateQuery.data?.completed === false &&
+    !onboardingStateQuery.isError;
+
+  // Guarded setCurrentView: while onboarding is locked, only allow transitions
+  // that stay inside the launcher sequence. Any attempt to leave (providers,
+  // settings, skills, …) is silently dropped. Once onboarding is complete the
+  // lock is released and navigation is free.
+  const requestSetView = useCallback(
+    (next: View) => {
+      if (onboardingLocked && !isLauncherView(next)) {
+        return;
+      }
+      setCurrentView(next);
+    },
+    [onboardingLocked],
+  );
+
+  // Final-step completion: marks onboarding as done with sensible defaults
+  // (locale = current i18n language, expert mode, sandbox enabled, redlines
+  // accepted, preferred CLI = claude) and then transitions to providers.
+  const completeOnboardingAndEnterProviders = useCallback(async () => {
+    try {
+      const currentLang =
+        onboardingStateQuery.data?.answers?.locale ??
+        (i18n.language === "en" || i18n.language === "ja"
+          ? (i18n.language as "en" | "ja")
+          : "zh");
+      await onboarding.complete({
+        locale: currentLang,
+        uiMode: "expert",
+        enableSandbox: true,
+        acceptedRedlines: true,
+        preferredCli: "claude",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["onboarding", "state"],
+      });
+      setCurrentView("providers");
+    } catch (error) {
+      console.error("[App] Failed to complete onboarding", error);
+      toast.error(
+        t("launcherStep.completeFailed", {
+          defaultValue: "完成引导失败，请重试",
+        }),
+      );
+    }
+  }, [onboardingStateQuery.data?.answers?.locale, queryClient, t]);
 
   const { data: settingsData } = useSettingsQuery();
   const useAppWindowControls =
@@ -620,15 +879,21 @@ function App() {
   }, [activeApp]);
 
   const currentViewRef = useRef(currentView);
+  const onboardingLockedRef = useRef(onboardingLocked);
 
   useEffect(() => {
     currentViewRef.current = currentView;
   }, [currentView]);
 
   useEffect(() => {
+    onboardingLockedRef.current = onboardingLocked;
+  }, [onboardingLocked]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "," && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
+        if (onboardingLockedRef.current) return;
         setCurrentView("settings");
         return;
       }
@@ -641,6 +906,11 @@ function App() {
       if (view === "providers") return;
 
       if (isTextEditableTarget(event.target)) return;
+
+      // While onboarding is locked, ESC must NOT escape the launcher sequence.
+      if (onboardingLockedRef.current && isLauncherView(view)) {
+        return;
+      }
 
       event.preventDefault();
       setCurrentView(view === "skillsDiscovery" ? "skills" : "providers");
@@ -991,6 +1261,92 @@ function App() {
           return <ToolsPanel />;
         case "openclawAgents":
           return <AgentsDefaultsPanel />;
+        case "launcherHome":
+          return (
+            <div className="px-6 pt-4">
+              <LauncherHomePage
+                onNavigate={(step) => {
+                  const map = {
+                    systemCheck: "launcherSystemCheck",
+                    sandbox: "launcherSandbox",
+                    install: "launcherInstall",
+                    profile: "launcherProfile",
+                    launch: "launcherLaunch",
+                  } as const;
+                  setCurrentView(map[step]);
+                }}
+              />
+            </div>
+          );
+        case "launcherSystemCheck":
+          return (
+            <div className="px-6 pt-4 pb-6">
+              <SystemCheckDashboard />
+              <LauncherStepFooter
+                currentView={currentView}
+                onNext={() =>
+                  setCurrentView(getNextLauncherView("launcherSystemCheck"))
+                }
+              />
+            </div>
+          );
+        case "launcherSandbox":
+          return (
+            <div className="px-6 pt-4 pb-6">
+              <SandboxSettings />
+              <LauncherStepFooter
+                currentView={currentView}
+                onNext={() =>
+                  setCurrentView(getNextLauncherView("launcherSandbox"))
+                }
+              />
+            </div>
+          );
+        case "launcherInstall":
+          return (
+            <div className="px-6 pt-4 pb-6">
+              <InstallerWizard
+                onComplete={() => setCurrentView("launcherProfile")}
+                onViewProfiles={() => setCurrentView("launcherProfile")}
+              />
+              <LauncherStepFooter
+                currentView={currentView}
+                onNext={() =>
+                  setCurrentView(getNextLauncherView("launcherInstall"))
+                }
+              />
+            </div>
+          );
+        case "launcherProfile":
+          return (
+            <div className="px-6 pt-4 pb-6">
+              <ProfileManager />
+              <LauncherStepFooter
+                currentView={currentView}
+                onNext={() =>
+                  setCurrentView(getNextLauncherView("launcherProfile"))
+                }
+              />
+            </div>
+          );
+        case "launcherLaunch":
+          return (
+            <div className="px-6 pt-4 pb-6">
+              <LauncherPanel
+                onNavigateInstaller={() => setCurrentView("launcherInstall")}
+                onNavigateProfileManager={() =>
+                  setCurrentView("launcherProfile")
+                }
+              />
+              <LauncherStepFooter
+                currentView={currentView}
+                isFinalStep
+                onNext={() => {
+                  void completeOnboardingAndEnterProviders();
+                }}
+              />
+            </div>
+          );
         default:
           return (
             <div className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -1178,20 +1534,46 @@ function App() {
           >
             {currentView !== "providers" ? (
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() =>
-                    setCurrentView(
-                      currentView === "skillsDiscovery"
-                        ? "skills"
-                        : "providers",
-                    )
+                {/* Back-arrow visibility while onboarding is locked:
+                    - hidden entirely on launcherSystemCheck (the first step)
+                    - hidden on launcherHome (cannot leave the launcher flow)
+                    - on later launcher sub-views, returning to launcherHome
+                      stays inside the launcher sequence so it remains visible.
+                    Once onboarding is complete, the arrow is unrestricted. */}
+                {(() => {
+                  if (onboardingLocked) {
+                    if (
+                      currentView === "launcherSystemCheck" ||
+                      currentView === "launcherHome"
+                    ) {
+                      return null;
+                    }
                   }
-                  className="mr-2 rounded-lg"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
+                  return (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      data-testid="header-back-arrow"
+                      onClick={() => {
+                        if (
+                          isLauncherView(currentView) &&
+                          currentView !== "launcherHome"
+                        ) {
+                          requestSetView("launcherHome");
+                        } else if (currentView === "launcherHome") {
+                          requestSetView("providers");
+                        } else if (currentView === "skillsDiscovery") {
+                          requestSetView("skills");
+                        } else {
+                          requestSetView("providers");
+                        }
+                      }}
+                      className="mr-2 rounded-lg"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                  );
+                })()}
                 <h1 className="text-lg font-semibold">
                   {currentView === "settings" && t("settings.title")}
                   {currentView === "prompts" &&
@@ -1213,11 +1595,23 @@ function App() {
                   {currentView === "openclawAgents" &&
                     t("openclaw.agents.title")}
                   {currentView === "hermesMemory" && t("hermes.memory.title")}
+                  {currentView === "launcherHome" &&
+                    t("shell.nav.home", { defaultValue: "启动器" })}
+                  {currentView === "launcherSystemCheck" &&
+                    t("shell.nav.systemcheck", { defaultValue: "系统自检" })}
+                  {currentView === "launcherSandbox" &&
+                    t("shell.nav.sandbox", { defaultValue: "沙盒" })}
+                  {currentView === "launcherInstall" &&
+                    t("shell.nav.install", { defaultValue: "装机" })}
+                  {currentView === "launcherProfile" &&
+                    t("shell.nav.profile", { defaultValue: "Profile" })}
+                  {currentView === "launcherLaunch" &&
+                    t("shell.nav.launch", { defaultValue: "启动" })}
                 </h1>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <div className="relative inline-flex items-center">
+                <div className="relative inline-flex flex-col items-start leading-tight">
                   <a
                     href="https://ccswitch.io"
                     target="_blank"
@@ -1229,9 +1623,28 @@ function App() {
                         : "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300",
                     )}
                   >
-                    CC Switch
+                    CC Launcher
                   </a>
+                  <span className="text-xs text-muted-foreground">
+                    {t("shell.brandTagline", {
+                      defaultValue: "Agent CLI 启动器",
+                    })}
+                  </span>
                 </div>
+                {!onboardingLocked && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    data-testid="header-rocket-entry"
+                    onClick={() => setCurrentView("launcherHome")}
+                    title={t("shell.launcherEntry", {
+                      defaultValue: "启动器",
+                    })}
+                    className="hover:bg-black/5 dark:hover:bg-white/5"
+                  >
+                    <Rocket className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"

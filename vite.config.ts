@@ -20,6 +20,7 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 3000,
     strictPort: true,
+    host: "127.0.0.1",
   },
   resolve: {
     alias: {

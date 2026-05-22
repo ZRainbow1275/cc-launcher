@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "CC Switch",
-    "description": "Claude Code / Codex / Gemini CLI 全方位辅助工具"
+    "title": "CC Launcher",
+    "description": "Agent CLI 启动器 — Claude Code / Codex / Gemini CLI 全方位辅助工具"
   },
   "common": {
     "add": "添加",
@@ -43,7 +43,7 @@
     "notSet": "未设置"
   },
   "firstRunNotice": {
-    "title": "欢迎使用 CC Switch",
+    "title": "欢迎使用 CC Launcher",
     "bodyDefault": "CC Switch 可以帮你在 Claude Code / Codex / Gemini CLI 的多个供应商之间一键切换。如果你之前已经配置过这些工具，CC Switch 会自动把现有设置保存为名为 “default” 的供应商，保证你的配置不会丢失。",
     "bodyOfficial": "列表里还预置了 “官方（Official）” 供应商，随时点一下即可切回官方默认配置。切换前 CC Switch 会自动把当前配置备份回 default，可以放心来回切。CC Switch 就是这样工作的 😊",
     "confirm": "我知道了"
@@ -306,6 +306,25 @@
     "tabAuth": "认证",
     "tabAdvanced": "高级",
     "tabProxy": "路由",
+    "fallback": {
+      "note": "等待与后端 IPC 接通后可编辑（当前运行于 Mock 模式）",
+      "general": {
+        "title": "通用配置",
+        "description": "管理语言 / 主题 / 应用可见性 / 技能存储位置 / 窗口与终端等基础偏好。"
+      },
+      "proxy": {
+        "title": "路由配置",
+        "description": "管理本地路由总开关、各应用代理接管、故障转移及全局代理。"
+      },
+      "auth": {
+        "title": "认证中心",
+        "description": "管理 GitHub Copilot 与 ChatGPT (Codex OAuth) 账号登录、刷新与切换。"
+      },
+      "advanced": {
+        "title": "高级",
+        "description": "管理配置目录、导入/导出、备份与恢复、WebDAV 云同步、模型测试与日志配置。"
+      }
+    },
     "authCenter": {
       "title": "OAuth 认证中心",
       "description": "在 Claude Code 中使用您的其他订阅，请注意合规风险。",
@@ -2629,5 +2648,620 @@
     "expiredHint": "请运行 {{tool}} 命令刷新登录",
     "queryFailed": "查询失败",
     "refresh": "刷新"
+  },
+  "sandbox": {
+    "title": "沙盒设置",
+    "subtitle": "L1 软拦截可解锁，L2 红线永久禁止",
+    "level": {
+      "title": "沙盒等级",
+      "description": "决定 CLI 启动时启用的默认拦截强度",
+      "strict": "严格",
+      "strictDesc": "拦截所有 L1 软拦截 + 全部 L2 红线",
+      "medium": "中等",
+      "mediumDesc": "仅拦截 L2 红线，L1 仅警告不阻止",
+      "confirmTitle": "切换沙盒等级",
+      "confirmMessage": "切换沙盒等级将影响所有 CLI 启动行为，包括已配置的 Profile。继续？",
+      "changed": "沙盒等级已切换至 {{level}}",
+      "changeFailed": "切换沙盒等级失败：{{error}}"
+    },
+    "l1": {
+      "title": "L1 软拦截 — 可解锁但有风险",
+      "description": "这些规则可以临时解锁 24 小时，但解锁后 AI 可能在你的项目里做出危险操作。",
+      "empty": "暂无可用规则",
+      "loading": "加载中...",
+      "loadError": "加载 L1 规则失败：{{error}}",
+      "permanentLock": "该规则不可解锁",
+      "unlockButton": "解锁此规则",
+      "relockButton": "重新加锁",
+      "statusEnabled": "已启用",
+      "statusDisabled": "已禁用",
+      "statusUnlocked": "🔓 已解锁 {{hours}} 小时",
+      "statusUnlockedLessThanHour": "🔓 已解锁（<1 小时）",
+      "toggleSuccess": "规则状态已更新",
+      "toggleFailed": "更新规则失败：{{error}}",
+      "relockSuccess": "规则已重新加锁",
+      "rm_arbitrary": {
+        "title": "rm -rf 任意路径",
+        "desc": "禁止 AI 执行 rm -rf 删除项目目录以外的内容",
+        "risk1": "我知道这可能导致项目文件被全部删除",
+        "risk2": "我知道这可能影响 git 工作区与历史",
+        "risk3": "出现数据丢失我自己负责"
+      },
+      "write_outside_cwd": {
+        "title": "写入工作目录以外路径",
+        "desc": "禁止 AI 向 ~, /, C:/ 等非工作目录写入文件",
+        "risk1": "我知道 AI 可能会覆盖系统文件",
+        "risk2": "我知道这可能污染用户主目录",
+        "risk3": "出现系统异常我自己负责"
+      },
+      "sudo_runas": {
+        "title": "sudo / runas 提权",
+        "desc": "禁止 AI 通过 sudo 或 runas 提升权限执行命令",
+        "risk1": "我知道提权后 AI 可以修改任意系统文件",
+        "risk2": "我知道这可能绕过所有 OS 沙盒",
+        "risk3": "出现安全事故我自己负责"
+      },
+      "curl_pipe_sh": {
+        "title": "curl | sh 远程执行",
+        "desc": "禁止 AI 通过 curl 直接管道执行远程脚本",
+        "risk1": "我知道远程脚本可能包含恶意代码",
+        "risk2": "我知道这等同于执行未审计的二进制",
+        "risk3": "出现入侵事故我自己负责"
+      },
+      "claude_skip_permissions": {
+        "title": "Claude --dangerously-skip-permissions",
+        "desc": "Claude Code 关闭权限检查的 CLI 旗标，永久不可解锁"
+      },
+      "codex_yolo": {
+        "title": "Codex --yolo / 绕过审批",
+        "desc": "Codex 完全绕过审批与沙盒的 CLI 旗标，永久不可解锁"
+      },
+      "network_revshell": {
+        "title": "网络反向 Shell",
+        "desc": "bash -i >& /dev/tcp/ 等反向 shell 模式，永久不可解锁"
+      }
+    },
+    "l2": {
+      "title": "L2 硬红线 — 永久禁止",
+      "description": "无论沙盒等级如何，无论你怎么操作，这些行为都将被直接阻止。",
+      "permanentLockBadge": "🔒 永久禁止",
+      "whyLink": "了解为什么",
+      "matchType": {
+        "regex": "正则",
+        "substring": "子串"
+      },
+      "loading": "加载中...",
+      "loadError": "加载 L2 红线失败：{{error}}",
+      "category": {
+        "DiskWipe": "清盘类",
+        "BootCritical": "改系统启动",
+        "HostsFile": "改 hosts 文件",
+        "LauncherSelf": "改 Launcher 自身",
+        "ReverseShell": "反向 Shell",
+        "Ransomware": "加密勒索",
+        "SudoDestructive": "提权破坏",
+        "CwdSystemRoot": "工作目录为系统根"
+      },
+      "disk_wipe": {
+        "rm_root": "rm -rf / — 清空根目录",
+        "rm_home": "rm -rf ~ — 清空用户主目录",
+        "del_root": "del C:\\* — 清空盘符根目录",
+        "format": "format / mkfs / wipefs — 格式化磁盘",
+        "dd_device": "dd of=/dev/sd* — 直接写入块设备"
+      },
+      "boot": {
+        "win_run_key": "写入 Windows Run 注册表项",
+        "launchd": "写入 macOS LaunchDaemons 目录"
+      },
+      "hosts": {
+        "unix": "修改 Unix /etc/hosts",
+        "windows": "修改 Windows hosts 文件"
+      },
+      "launcher": {
+        "cc_switch_dir": "修改 Launcher 自身（~/.cc-switch）"
+      },
+      "revshell": {
+        "bash_tcp": "bash -i 反向 TCP shell",
+        "nc_e": "nc -e 反向 shell"
+      },
+      "sudo": {
+        "rm_root": "sudo rm -rf / — 提权清盘",
+        "dd_disk": "sudo dd if= — 提权写盘"
+      },
+      "registry": {
+        "run_value": "REG ADD HKLM ...Run — 写入开机自启"
+      },
+      "cli": {
+        "dangerously_skip": "--dangerously-skip-permissions CLI 旗标"
+      }
+    },
+    "platform": {
+      "windows": "Windows 平台 Claude Code 无内置 OS 沙盒，5/8 红线靠 Launcher 自家 Job Object + Restricted Token + DACL 兜底。",
+      "macos": "macOS 平台使用 sandbox-exec profile + Hardened Runtime 双重防护。",
+      "linux": "Linux 平台使用 namespace + seccomp + AppArmor/SELinux 防护。"
+    },
+    "confirm": {
+      "title": "解锁危险规则",
+      "step": "第 {{current}} 步 / 共 3 步",
+      "step1Title": "你确定要解锁这条规则吗？",
+      "step1Lead": "解锁后，AI 可能在你的项目中执行以下危险操作：",
+      "step1Continue": "我了解风险，继续",
+      "step2Title": "请勾选以下风险知情书",
+      "step2Lead": "你必须明确同意以下 3 项风险，才能继续：",
+      "step3Title": "请输入关键词确认",
+      "step3Lead": "请输入下列关键词以最终确认解锁。区分大小写，必须完全一致。",
+      "step3Keyword": "关键词",
+      "step3Placeholder": "请逐字输入上方关键词",
+      "step3Submit": "解锁此规则 24 小时",
+      "submitting": "解锁中...",
+      "back": "上一步",
+      "next": "继续",
+      "cancel": "取消",
+      "unlocked": "已解锁，24 小时后自动重新加锁",
+      "unlockFailed": "解锁失败：{{error}}",
+      "keywordZh": "我已知晓",
+      "keywordEn": "I UNDERSTAND",
+      "keywordJa": "理解しました"
+    },
+    "docLink": {
+      "windows": "docs/env-setup-windows-zh.md#section-7",
+      "macos": "docs/env-setup-macos-zh.md#section-7"
+    }
+  },
+  "shell": {
+    "brandTagline": "Agent CLI 启动器",
+    "launcherEntry": "启动器",
+    "nav": {
+      "home": "启动器",
+      "install": "装机",
+      "profile": "Profile",
+      "launch": "启动",
+      "switch": "节点切换",
+      "systemcheck": "系统自检",
+      "sandbox": "沙盒"
+    },
+    "modeSwitch": {
+      "title": "界面模式",
+      "novice": "小白",
+      "expert": "专家",
+      "noviceHint": "小白模式：仅显示核心操作",
+      "expertHint": "专家模式：显示全部高级面板",
+      "confirmTitle": "确认切换模式",
+      "confirmNoviceToExpert": "进入专家模式将解锁所有高级面板，可能误改影响 CLI。继续？",
+      "confirmExpertToNovice": "切回小白模式将隐藏专家面板（数据保留）。继续？",
+      "switchedTo": {
+        "novice": "已切换到小白模式",
+        "expert": "已切换到专家模式"
+      },
+      "switchFailed": "切换失败：{{error}}"
+    },
+    "noviceStub": {
+      "title": "小白模式主页",
+      "subtitle": "NoviceHome 占位 — A3 待实装",
+      "description": "此处将由 A3 任务实装新手主页：3 个核心按钮（安装 CLI / 配置方案 / 启动 CLI）。"
+    }
+  },
+  "launcher": {
+    "title": "启动 CLI",
+    "subtitle": "选择终端 → 确认安全配置 → 一键启动",
+    "activeProfile": {
+      "empty": "尚未激活任何 Profile",
+      "emptyHint": "先到 Profile Manager 创建并激活一个 Profile，再回到这里启动 CLI。",
+      "createLink": "去 Profile Manager 创建 Profile",
+      "header": "当前激活的 Profile",
+      "providerLabel": "Provider",
+      "providerEmpty": "未设置",
+      "mcpCount": "MCP {{count}}",
+      "skillsCount": "Skills {{count}}",
+      "noProvider": "（无 Provider）"
+    },
+    "terminal": {
+      "title": "选择系统终端",
+      "subtitle": "Launcher 仅负责拉起系统终端，不嵌入伪终端。",
+      "available": "可用",
+      "unavailable": "未安装",
+      "recommended": "推荐",
+      "version": "版本 {{version}}",
+      "pathLabel": "路径",
+      "empty": "未检测到可用的系统终端"
+    },
+    "workdir": {
+      "title": "工作目录（CWD）",
+      "subtitle": "L2 硬红线：CLI 进程被锁定在此目录，不可逃逸。",
+      "path": "{{path}}",
+      "absoluteLabel": "绝对路径",
+      "open": "打开文件夹",
+      "opening": "打开中...",
+      "openSuccess": "已打开工作目录",
+      "openFailed": "无法打开工作目录",
+      "resetDisabled": "重置工作目录",
+      "resetTooltip": "L2 红线：CWD escape 永久禁用"
+    },
+    "safety": {
+      "title": "本次启动的安全配置",
+      "subtitle": "点击展开查看 Launcher 实际注入到 CLI 的安全旗标与红线。",
+      "flags": "CLI 安全启动旗标",
+      "flagsHintClaude": "Claude Code 安全模式：禁用 yolo、隔离 MCP、限定可写目录、追加官方安全 prompt。",
+      "flagsHintCodex": "Codex 通过原生 [profiles.<name>] 切 Profile，1:1 映射。",
+      "cwd": "CWD 锁定路径",
+      "l1Count": "L1 软拦截规则：已启用 {{count}} 条",
+      "l2Count": "L2 硬红线：永不可关闭 {{count}} 条",
+      "loading": "加载中..."
+    },
+    "launchButton": "一键启动",
+    "launching": "正在拉起终端...",
+    "success": {
+      "title": "已在 {{terminal}} 启动 CLI",
+      "body": "Profile：{{profile}} | CWD：{{cwd}}",
+      "checkTaskbar": "如未弹出，请检查任务栏"
+    },
+    "error": {
+      "title": "启动失败",
+      "nodeMissing": "未检测到 Node 运行时，无法启动 CLI",
+      "cliMissing": "未检测到 {{cli}} CLI，请先在安装向导中安装",
+      "profileInvalid": "Profile 配置损坏：{{detail}}",
+      "terminalNotFound": "选定的终端不可用，请重新选择",
+      "unknown": "未知错误：{{detail}}",
+      "fixLink": "前往安装向导修复",
+      "fixProfileLink": "前往 Profile Manager 检查",
+      "close": "关闭"
+    },
+    "disabledReason": {
+      "noProfile": "请先到 Profile Manager 激活一个 Profile",
+      "noTerminal": "请先选择一个可用的系统终端",
+      "launching": "正在启动..."
+    }
+  },
+  "profile": {
+    "manager": {
+      "title": "Profile 管理"
+    },
+    "cli": {
+      "claude": "Claude Code",
+      "codex": "Codex"
+    },
+    "list": {
+      "title": "{{cli}} 的 Profile",
+      "createButton": "新建 Profile",
+      "empty": "尚无 Profile，点击 \"+ 新建 Profile\" 开始",
+      "active": "Active",
+      "builtin": "内置",
+      "switchTo": "切到此 Profile",
+      "switchToCurrent": "当前已生效",
+      "providerBadge": "Provider: {{name}}",
+      "providerEmpty": "未设置",
+      "mcpBadge": "MCP: {{count}}",
+      "skillBadge": "Skills: {{count}}",
+      "cannotDeleteBuiltin": "内置 Profile 不可删",
+      "cannotDeleteActive": "请先切换到其他 Profile 后再删除",
+      "cannotDeleteLast": "至少保留一个可编辑 Profile"
+    },
+    "editor": {
+      "titleCreate": "新建 Profile",
+      "titleEdit": "编辑 Profile",
+      "subtitle": "{{cli}} 配置",
+      "nameLabel": "名称",
+      "namePlaceholder": "例如：工作 / 实验",
+      "descriptionLabel": "描述",
+      "iconLabel": "图标",
+      "iconColorLabel": "图标颜色",
+      "providerLabel": "Provider",
+      "providerPlaceholder": "选择 Provider",
+      "providerEmpty": "（不指定）",
+      "mcpLabel": "MCP 子集",
+      "mcpEmpty": "暂无可选 MCP",
+      "mcpEnabledHint": "已对该 CLI 启用",
+      "skillsLabel": "Skills 子集",
+      "skillsEmpty": "暂无可选 Skill",
+      "settingsLabel": "settings.json 增量（JSON 对象）",
+      "errors": {
+        "nameRequired": "请填写名称",
+        "settingsInvalidJson": "JSON 格式错误",
+        "settingsMustBeObject": "settings.json 必须是 JSON 对象"
+      }
+    },
+    "switch": {
+      "title": "切换 Profile 预览",
+      "subtitle": "{{from}} → {{to}}",
+      "none": "（无）",
+      "unchanged": "无变化",
+      "providerSection": "Provider",
+      "mcpSection": "MCP 差量",
+      "skillsSection": "Skills 差量",
+      "settingsSection": "settings.json 差量",
+      "confirm": "确认切换",
+      "switching": "正在切换...",
+      "retry": "重试",
+      "failureTitle": "切换失败",
+      "failureUnknown": "未知错误",
+      "backupDir": "备份目录"
+    },
+    "delete": {
+      "title": "删除 Profile",
+      "message": "确认删除 Profile \"{{name}}\"？此操作不可撤销。"
+    },
+    "toast": {
+      "createSuccess": "已创建 Profile：{{name}}",
+      "updateSuccess": "已更新 Profile：{{name}}",
+      "switchSuccess": "切换成功",
+      "deleteSuccess": "已删除 Profile",
+      "deleteFailed": {
+        "BUILTIN_PROFILE_PROTECTED": "内置 Profile 不可删除",
+        "PROFILE_IS_ACTIVE": "无法删除当前激活的 Profile",
+        "PROFILE_NOT_FOUND": "Profile 不存在"
+      }
+    }
+  },
+  "systemCheck": {
+    "title": "系统检查",
+    "subtitle": "17 项实时探测，一键修复关键问题",
+    "lastUpdated": "上次更新：{{time}}",
+    "overall": {
+      "green": "全部就绪，可以启动",
+      "yellow": "有部分项目建议优化",
+      "red": "存在必须修复的项目",
+      "missing": "存在必须修复的项目",
+      "unknown": "暂未完成检测"
+    },
+    "counts": {
+      "green": "绿",
+      "yellow": "黄",
+      "red": "红",
+      "unknown": "未知"
+    },
+    "groups": {
+      "system": "系统资源",
+      "runtime": "运行时",
+      "env": "环境与权限",
+      "network": "网络",
+      "workdir": "工作目录"
+    },
+    "actions": {
+      "reprobe": "全部探测",
+      "fixAll": "一键全修 ({{count}})",
+      "fix": "一键修复",
+      "learnMore": "了解更多",
+      "collapse": "收起",
+      "expand": "展开"
+    },
+    "summary": {
+      "title": "系统检查",
+      "label": "系统检查：绿 {{green}} / 黄 {{yellow}} / 红 {{red}}"
+    },
+    "error": {
+      "fetch": "无法获取检测报告，请稍后重试"
+    },
+    "fix": {
+      "target": "修复对象",
+      "batchRemaining": "队列中还有 {{count}} 项待修复",
+      "next": "下一项",
+      "retry": "重试",
+      "cannotCancel": "此操作无法取消",
+      "toast": {
+        "success": "修复成功",
+        "failed": "修复失败"
+      },
+      "phase": {
+        "idle": "准备中…",
+        "starting": "开始执行…",
+        "running": "执行中…",
+        "validating": "验证结果…",
+        "completed": "修复完成",
+        "failed": "修复失败"
+      },
+      "installNode": {
+        "title": "安装 Node.js",
+        "description": "将 Node.js LTS 安装到独立运行时目录，不影响系统已有的 Node。"
+      },
+      "installGit": {
+        "title": "安装 Git",
+        "description": "为你的电脑安装 Git，用于版本控制能力。"
+      },
+      "cleanEnvVar": {
+        "title": "清理环境变量冲突",
+        "description": "删除会干扰 CLI 的环境变量，自动备份原值，可一键回滚。"
+      },
+      "openHomeDir": {
+        "title": "打开主目录",
+        "description": "打开用户主目录，便于清理空间（不会修改任何文件）。"
+      },
+      "injectPathEntries": {
+        "title": "注入 PATH 条目",
+        "description": "在 Launcher 子进程中注入必要的 PATH 条目，不会修改系统配置。"
+      },
+      "externalLink": {
+        "title": "查看说明",
+        "description": "打开教程页面，按步骤完成系统级配置。"
+      }
+    }
+  },
+  "installer": {
+    "title": "CLI 安装向导",
+    "subtitle": "一键准备 Node.js 私有运行时并安装 Claude Code / Codex CLI",
+    "steps": {
+      "systemCheck": {
+        "title": "系统自检"
+      },
+      "node": {
+        "title": "Node.js 运行时"
+      },
+      "select": {
+        "title": "选择 CLI"
+      },
+      "install": {
+        "title": "安装与校验"
+      }
+    },
+    "nav": {
+      "back": "上一步",
+      "next": "下一步",
+      "finish": "完成"
+    },
+    "step1": {
+      "redBlocks": "存在必须修复的红灯项，请先在系统自检中处理后再继续。",
+      "yellowWarn": "存在部分黄灯项，可继续，但建议稍后回到系统检查处理。",
+      "continue": "可以继续，未发现阻塞问题。"
+    },
+    "step2": {
+      "detecting": "正在探测 Node.js…",
+      "ready": "已就绪 {{version}}",
+      "missing": "需要安装 Node 20 LTS 到私有目录",
+      "installNote": "CC Launcher 会把 Node 20 LTS 装到独立目录，不会污染系统 PATH。",
+      "installButton": "安装 Node",
+      "installing": "正在安装 Node…",
+      "pathLabel": "私有运行时路径",
+      "uninstallNote": "卸载 CC Launcher 时此目录会自动清理"
+    },
+    "step3": {
+      "title": "选择要安装的 CLI",
+      "description": "勾选你需要使用的 Agent CLI；已安装的工具默认会被勾选用于校验。",
+      "claude": "Claude Code",
+      "codex": "Codex CLI",
+      "installed": "已安装",
+      "confirm": "下一步：开始安装",
+      "noneSelected": "请至少勾选一个 CLI 后再继续"
+    },
+    "step4": {
+      "registryPicker": {
+        "title": "镜像源探测",
+        "subtitle": "并行 probe 4 个 npm 镜像，按延迟自动排序选择最快源",
+        "probe": "重新探测",
+        "probing": "探测中…",
+        "latency": "{{ms}} ms",
+        "fastest": "最快",
+        "manual": "手动指定镜像",
+        "manualPlaceholder": "https://...",
+        "allFailed": "所有镜像不可达，请检查网络或 VPN",
+        "retry": "重试",
+        "note": "腾讯镜像在某些环境根路径返回 404，已自动跳过该镜像",
+        "select": "选择此源",
+        "confirmSelection": "使用所选镜像继续",
+        "rowFailed": "失败",
+        "rowTimeout": "超时",
+        "rowOk": "可用",
+        "rowUnknown": "未知"
+      },
+      "progress": {
+        "phase": "当前阶段",
+        "speed": "{{kbps}} KB/s",
+        "bytes": "{{loaded}} / {{total}} KB",
+        "cancel": "取消",
+        "success": "{{cli}} 安装完成 v{{version}}",
+        "error": "{{cli}} 安装失败",
+        "cleaned": "已自动清理残留文件",
+        "retry": "重试",
+        "retryDifferent": "切换镜像重试",
+        "current": "正在处理：{{cli}}"
+      },
+      "allDone": "全部 CLI 已安装完成，进入卡片管理视图"
+    },
+    "cardView": {
+      "title": "CLI 管理",
+      "subtitle": "查看已安装的 Agent CLI、版本以及 Profile 数量",
+      "installed": "已安装",
+      "notInstalled": "未安装",
+      "installing": "安装中",
+      "version": "版本",
+      "profileCount": "{{count}} 个 Profile",
+      "noProfile": "尚未创建 Profile",
+      "uninstall": "卸载",
+      "uninstallConfirmTitle": "确认卸载 {{cli}}",
+      "uninstallConfirm": "将删除 {{cli}} 的私有 node_modules 及 .bin 软链。此操作不可撤销。",
+      "viewProfiles": "查看 Profile",
+      "installNow": "立即安装",
+      "reinstall": "再次进入向导"
+    }
+  },
+  "novice": {
+    "title": "CC Launcher",
+    "buttons": {
+      "install": "一键装工具",
+      "installSubtitle": "自动安装 Claude Code / Codex 等 CLI",
+      "switchProfile": "切换 Profile",
+      "switchProfileSubtitle": "选择/切换 MCP、Skills、Provider 配置",
+      "switchProfileDisabledReason": "先装一个 CLI 才能配置 Profile",
+      "launch": "一键启动",
+      "launchSubtitle": "在系统终端中拉起所选 CLI",
+      "launchDisabledNoCli": "先装一个 CLI",
+      "launchDisabledNoProfile": "先创建 Profile"
+    },
+    "statusBar": {
+      "profile": "Profile",
+      "sandbox": "沙盒",
+      "system": "系统",
+      "noProfile": "未选择",
+      "sandboxLevel": {
+        "strict": "严格",
+        "medium": "中等"
+      }
+    },
+    "onboarding": {
+      "title": "欢迎使用 CC Launcher",
+      "step1": {
+        "title": "欢迎",
+        "body": "CC Launcher 帮你一键安装并启动 Claude Code、Codex 等 Agent CLI。我们将用 4 步带你完成首次设置，让你不需要懂命令行也能跑通。",
+        "next": "下一步"
+      },
+      "step2": {
+        "title": "安全声明",
+        "body": "请阅读并同意以下安全条款，了解 CC Launcher 的沙盒边界。",
+        "terms": "CC Launcher 提供两层禁令保护：L1 软拦截层（rm -rf、sudo、危险 flag 等可在专家模式临时解锁）+ L2 硬红线（清盘、改启动项、改 hosts、改 Launcher 自身、加密勒索类不可关闭）。沙盒可大幅降低风险，但不能 100% 阻止所有攻击；请勿在重要数据目录运行未知工具。",
+        "checkbox": "我已阅读并同意上述条款",
+        "next": "下一步"
+      },
+      "step3": {
+        "title": "选择默认 CLI",
+        "body": "选择你最常用的 CLI（之后随时可改）。",
+        "claude": "Claude Code",
+        "codex": "Codex CLI",
+        "next": "下一步"
+      },
+      "step4": {
+        "title": "完成",
+        "body": "首次设置完成。你可以从主页开始一键装工具、切换 Profile、或启动 CLI。",
+        "finish": "开始使用"
+      }
+    }
+  },
+  "launcherHome": {
+    "title": "启动器 — 一站式配置 CC Launcher",
+    "subtitle": "按 1 → 5 的顺序完成所有步骤，即可在 CC Launcher 中切换并启动 Agent CLI。",
+    "openStep": "进入",
+    "completion": "完成所有步骤后会自动回到 CC Launcher 节点切换主界面。",
+    "skip": "跳过，直接进入 CC Launcher 节点切换",
+    "steps": {
+      "systemCheck": {
+        "title": "系统自检",
+        "desc": "扫描 OS / CPU / Node / Git / 网络等 17 项基础环境"
+      },
+      "sandbox": {
+        "title": "沙盒",
+        "desc": "确认 L1 软拦截规则与 L2 硬红线的安全策略"
+      },
+      "install": {
+        "title": "装机",
+        "desc": "一键安装 Claude Code / Codex CLI 等 Agent 工具"
+      },
+      "profile": {
+        "title": "Profile",
+        "desc": "创建并激活每个 CLI 的 MCP / Skills / Provider 配置 Bundle"
+      },
+      "launch": {
+        "title": "启动",
+        "desc": "在系统终端中一键拉起选中的 CLI"
+      }
+    }
+  },
+  "launcherStep": {
+    "next": "下一步：{{label}}",
+    "completeAndEnterProviders": "完成并进入节点切换",
+    "completeFailed": "完成引导失败，请重试",
+    "nextLabel": {
+      "sandbox": "沙盒",
+      "install": "装机",
+      "profile": "Profile",
+      "launch": "启动",
+      "providers": "节点切换"
+    }
   }
 }

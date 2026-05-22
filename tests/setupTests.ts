@@ -7,6 +7,16 @@ import { server } from "./msw/server";
 import { resetProviderState } from "./msw/state";
 import "./msw/tauriMocks";
 
+// Globally disable the App.tsx first-launch onboarding redirect by default,
+// so pre-existing tests that mount <App /> with an empty localStorage are
+// unaffected. Tests that specifically want to exercise the redirect can
+// opt-in by setting this flag to false in their own beforeEach.
+if (typeof window !== "undefined") {
+  (
+    window as unknown as { __CC_DISABLE_FIRST_LAUNCH_REDIRECT__?: boolean }
+  ).__CC_DISABLE_FIRST_LAUNCH_REDIRECT__ = true;
+}
+
 beforeAll(async () => {
   server.listen({ onUnhandledRequest: "warn" });
   await i18n.use(initReactI18next).init({
