@@ -21,7 +21,7 @@ impl Database {
     }
 
     /// 在指定连接上创建表（供迁移和测试使用）
-    pub(crate) fn create_tables_on_conn(conn: &Connection) -> Result<(), AppError> {
+    pub fn create_tables_on_conn(conn: &Connection) -> Result<(), AppError> {
         // 1. Providers 表
         conn.execute(
             "CREATE TABLE IF NOT EXISTS providers (
@@ -352,6 +352,130 @@ impl Database {
             [],
         );
 
+        // 19~22. cc-launcher Profile 表（v11+）
+        // 注意：profile_skill / profile_mcp 通过 FK 引用 skills(id) / mcp_servers(id)。
+        // 旧库的 skills 表在 v1→v2 / v2→v3 迁移中会被 rename + recreate，
+        // 若此处提前建表，FK 引用会被 SQLite 改写到 rename 后的旧表名（如 skills_old），
+        // 导致 v10→v11 回填阶段报 "no such table: skills_old"。
+        // 因此 profile 表的实际创建由 migrate_v10_to_v11 在 skills 表稳定后完成。
+
+        Ok(())
+    }
+
+    /// 创建 cc-launcher Profile 相关表（v11+）
+    ///
+    /// 包含：
+    /// - `profiles` ：Per-CLI Profile 主表（复合主键 (id, target_cli)）
+    /// - `profile_mcp` ：Profile ↔ MCP 关联表（M:N）
+    /// - `profile_skill` ：Profile ↔ Skill 关联表（M:N）
+    /// - `cli_state` ：Per-CLI 激活态追踪（每个 CLI 至多一个 active profile）
+    ///
+    /// 完整设计见 `.trellis/tasks/05-21-cc-launcher-mvp/research/profile-model.md §3`。
+    pub(crate) fn create_profile_tables_on_conn(conn: &Connection) -> Result<(), AppError> {
+        // profiles 主表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS profiles (
+                id TEXT NOT NULL,
+                target_cli TEXT NOT NULL
+                    CHECK (target_cli IN ('claude','codex','gemini','opencode','hermes')),
+                name TEXT NOT NULL,
+                description TEXT,
+                icon TEXT,
+                icon_color TEXT,
+                provider_id TEXT,
+                settings_json TEXT NOT NULL DEFAULT '{}',
+                sort_index INTEGER NOT NULL DEFAULT 0,
+                is_builtin INTEGER NOT NULL DEFAULT 0,
+                transitioning INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (id, target_cli),
+                FOREIGN KEY (provider_id, target_cli)
+                    REFERENCES providers(id, app_type) ON DELETE SET NULL
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 profiles 表失败: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_profiles_cli
+             ON profiles(target_cli, sort_index)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 profiles 索引失败: {e}")))?;
+
+        // profile_mcp 关联表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS profile_mcp (
+                profile_id TEXT NOT NULL,
+                target_cli TEXT NOT NULL,
+                mcp_id TEXT NOT NULL,
+                sort_index INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (profile_id, target_cli, mcp_id),
+                FOREIGN KEY (profile_id, target_cli)
+                    REFERENCES profiles(id, target_cli) ON DELETE CASCADE,
+                FOREIGN KEY (mcp_id)
+                    REFERENCES mcp_servers(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 profile_mcp 表失败: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_profile_mcp_lookup
+             ON profile_mcp(profile_id, target_cli)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 profile_mcp 索引失败: {e}")))?;
+
+        // profile_skill 关联表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS profile_skill (
+                profile_id TEXT NOT NULL,
+                target_cli TEXT NOT NULL,
+                skill_id TEXT NOT NULL,
+                sort_index INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (profile_id, target_cli, skill_id),
+                FOREIGN KEY (profile_id, target_cli)
+                    REFERENCES profiles(id, target_cli) ON DELETE CASCADE,
+                FOREIGN KEY (skill_id)
+                    REFERENCES skills(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 profile_skill 表失败: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_profile_skill_lookup
+             ON profile_skill(profile_id, target_cli)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 profile_skill 索引失败: {e}")))?;
+
+        // cli_state 激活态追踪
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS cli_state (
+                target_cli TEXT PRIMARY KEY
+                    CHECK (target_cli IN ('claude','codex','gemini','opencode','hermes')),
+                active_profile_id TEXT,
+                transitioning_to TEXT,
+                last_switched_at INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (active_profile_id, target_cli)
+                    REFERENCES profiles(id, target_cli) ON DELETE SET NULL
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 cli_state 表失败: {e}")))?;
+
+        // 初始化所有 CLI 的 cli_state 行（幂等）
+        for cli in ["claude", "codex", "gemini", "opencode", "hermes"] {
+            conn.execute(
+                "INSERT OR IGNORE INTO cli_state (target_cli) VALUES (?1)",
+                params![cli],
+            )
+            .map_err(|e| AppError::Database(format!("初始化 cli_state {cli} 失败: {e}")))?;
+        }
+
         Ok(())
     }
 
@@ -362,7 +486,7 @@ impl Database {
     }
 
     /// 在指定连接上应用 Schema 迁移
-    pub(crate) fn apply_schema_migrations_on_conn(conn: &Connection) -> Result<(), AppError> {
+    pub fn apply_schema_migrations_on_conn(conn: &Connection) -> Result<(), AppError> {
         conn.execute("SAVEPOINT schema_migration;", [])
             .map_err(|e| AppError::Database(format!("开启迁移 savepoint 失败: {e}")))?;
 
@@ -430,6 +554,13 @@ impl Database {
                         log::info!("迁移数据库从 v9 到 v10（添加 Hermes Agent 支持）");
                         Self::migrate_v9_to_v10(conn)?;
                         Self::set_user_version(conn, 10)?;
+                    }
+                    10 => {
+                        log::info!(
+                            "迁移数据库从 v10 到 v11（cc-launcher Profile 表 + 默认 Profile 回填）"
+                        );
+                        Self::migrate_v10_to_v11(conn)?;
+                        Self::set_user_version(conn, 11)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1200,6 +1331,124 @@ impl Database {
         Ok(())
     }
 
+    /// v10 -> v11 迁移：cc-launcher Profile 模型
+    ///
+    /// 1. 创建 4 张新表：`profiles` / `profile_mcp` / `profile_skill` / `cli_state`
+    /// 2. 为每个 CLI 回填一个 "Default" Profile（取该 CLI 当前激活的 provider + enabled MCP/Skill 列表）
+    /// 3. 更新 `cli_state.active_profile_id` 指向该 Default Profile
+    ///
+    /// 幂等：若 profiles 表已存在则跳过结构创建；
+    /// 若已存在 `default-<cli>` profile 则跳过 backfill（防止重复迁移）。
+    fn migrate_v10_to_v11(conn: &Connection) -> Result<(), AppError> {
+        // 1. 创建表结构（幂等）
+        Self::create_profile_tables_on_conn(conn)?;
+
+        // 2. 仅在 mcp_servers / skills 已是 v3+ 结构时才回填关联表（旧库可能 schema 不一致）
+        let mcp_has_enabled_claude = Self::has_column(conn, "mcp_servers", "enabled_claude")?;
+        let skills_has_enabled_claude =
+            Self::has_column(conn, "skills", "enabled_claude").unwrap_or(false);
+
+        let now_ms = chrono::Utc::now().timestamp_millis();
+
+        for cli in ["claude", "codex", "gemini", "opencode", "hermes"] {
+            let profile_id = format!("default-{cli}");
+
+            // 幂等：若该 default profile 已存在则跳过
+            let exists: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM profiles WHERE id = ?1 AND target_cli = ?2",
+                    params![&profile_id, cli],
+                    |r| r.get(0),
+                )
+                .map_err(|e| AppError::Database(format!("查询 default profile 失败: {e}")))?;
+            if exists > 0 {
+                continue;
+            }
+
+            // 取当前激活 provider（若有）
+            let current_provider: Option<String> = conn
+                .query_row(
+                    "SELECT id FROM providers WHERE app_type = ?1 AND is_current = 1 LIMIT 1",
+                    params![cli],
+                    |r| r.get(0),
+                )
+                .ok();
+
+            let name = format!("Default {}", capitalize_cli(cli));
+            let description = format!("从 cc-switch v3 迁移的 {cli} 默认 Profile");
+
+            conn.execute(
+                "INSERT INTO profiles
+                 (id, target_cli, name, description, provider_id,
+                  settings_json, sort_index, is_builtin, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, '{}', 0, 1, ?6, ?6)",
+                params![
+                    &profile_id,
+                    cli,
+                    &name,
+                    &description,
+                    current_provider,
+                    now_ms
+                ],
+            )
+            .map_err(|e| AppError::Database(format!("回填 default-{cli} profile 失败: {e}")))?;
+
+            // 回填 MCP 关联：把所有 enabled_<cli>=1 的 MCP 写入 profile_mcp
+            if mcp_has_enabled_claude {
+                let enabled_col = match cli {
+                    "claude" => "enabled_claude",
+                    "codex" => "enabled_codex",
+                    "gemini" => "enabled_gemini",
+                    "opencode" => "enabled_opencode",
+                    "hermes" => "enabled_hermes",
+                    _ => continue,
+                };
+                let mcp_sql = format!(
+                    "INSERT OR IGNORE INTO profile_mcp (profile_id, target_cli, mcp_id, sort_index)
+                     SELECT ?1, ?2, id, 0 FROM mcp_servers WHERE {enabled_col} = 1"
+                );
+                conn.execute(&mcp_sql, params![&profile_id, cli])
+                    .map_err(|e| {
+                        AppError::Database(format!("回填 {profile_id} MCP 关联失败: {e}"))
+                    })?;
+            }
+
+            // 回填 Skill 关联
+            if skills_has_enabled_claude {
+                let enabled_col = match cli {
+                    "claude" => "enabled_claude",
+                    "codex" => "enabled_codex",
+                    "gemini" => "enabled_gemini",
+                    "opencode" => "enabled_opencode",
+                    "hermes" => "enabled_hermes",
+                    _ => continue,
+                };
+                let skill_sql = format!(
+                    "INSERT OR IGNORE INTO profile_skill (profile_id, target_cli, skill_id, sort_index)
+                     SELECT ?1, ?2, id, 0 FROM skills WHERE {enabled_col} = 1"
+                );
+                conn.execute(&skill_sql, params![&profile_id, cli])
+                    .map_err(|e| {
+                        AppError::Database(format!("回填 {profile_id} Skill 关联失败: {e}"))
+                    })?;
+            }
+
+            // 标记 cli_state 激活
+            conn.execute(
+                "UPDATE cli_state
+                 SET active_profile_id = ?1, last_switched_at = ?2
+                 WHERE target_cli = ?3",
+                params![&profile_id, now_ms, cli],
+            )
+            .map_err(|e| {
+                AppError::Database(format!("更新 cli_state {cli} active 指针失败: {e}"))
+            })?;
+        }
+
+        log::info!("v10 -> v11 迁移完成：已建立 Profile 表结构 + 5 个 CLI 的 Default Profile 回填");
+        Ok(())
+    }
+
     /// 插入默认模型定价数据
     /// 格式: (model_id, display_name, input, output, cache_read, cache_creation)
     /// 注意: model_id 使用短横线格式（如 claude-haiku-4-5），与 API 返回的模型名称标准化后一致
@@ -1902,12 +2151,12 @@ impl Database {
 
     // --- 辅助方法 ---
 
-    pub(crate) fn get_user_version(conn: &Connection) -> Result<i32, AppError> {
+    pub fn get_user_version(conn: &Connection) -> Result<i32, AppError> {
         conn.query_row("PRAGMA user_version;", [], |row| row.get(0))
             .map_err(|e| AppError::Database(format!("读取 user_version 失败: {e}")))
     }
 
-    pub(crate) fn set_user_version(conn: &Connection, version: i32) -> Result<(), AppError> {
+    pub fn set_user_version(conn: &Connection, version: i32) -> Result<(), AppError> {
         if version < 0 {
             return Err(AppError::Database("user_version 不能为负数".to_string()));
         }
@@ -1977,7 +2226,7 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn table_exists(conn: &Connection, table: &str) -> Result<bool, AppError> {
+    pub fn table_exists(conn: &Connection, table: &str) -> Result<bool, AppError> {
         Self::validate_identifier(table, "表名")?;
 
         let mut stmt = conn
@@ -2046,5 +2295,14 @@ impl Database {
             .map_err(|e| AppError::Database(format!("为表 {table} 添加列 {column} 失败: {e}")))?;
         log::info!("已为表 {table} 添加缺失列 {column}");
         Ok(true)
+    }
+}
+
+/// 将 CLI 字符串首字母大写（用于人类可读的 Profile 名）
+fn capitalize_cli(cli: &str) -> String {
+    let mut chars = cli.chars();
+    match chars.next() {
+        Some(c) => c.to_ascii_uppercase().to_string() + chars.as_str(),
+        None => String::new(),
     }
 }

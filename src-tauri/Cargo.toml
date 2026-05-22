@@ -43,7 +43,7 @@ reqwest = { version = "0.12", features = ["rustls-tls", "json", "stream", "socks
 arboard = "3.6"
 flate2 = "1"
 brotli = "7"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync", "process", "io-util", "fs"] }
 futures = "0.3"
 async-stream = "0.3"
 bytes = "1.5"
@@ -79,6 +79,11 @@ uuid = { version = "1.11", features = ["v4"] }
 sha2 = "0.10"
 json5 = "0.4"
 json-five = "0.3.1"
+sysinfo = { version = "=0.39.2", default-features = false, features = ["system", "disk"] }
+which = "=8.0.2"
+hex = "0.4"
+tar = "0.4"
+xz2 = "0.1"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2"
@@ -88,6 +93,17 @@ webkit2gtk = { version = "2.0.1", features = ["v2_16"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
+# Note: win32job 2.0.3 keeps its ExtendedLimitInfo.0 field as pub(crate), preventing
+# access to ProcessMemoryLimit / JobMemoryLimit / ActiveProcessLimit. We therefore
+# call the raw Win32 API directly via windows-sys 0.52 for the Job Object work.
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_System_SystemServices",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"
@@ -105,3 +121,4 @@ strip = "symbols"
 [dev-dependencies]
 serial_test = "3"
 tempfile = "3"
+httpmock = "0.7"

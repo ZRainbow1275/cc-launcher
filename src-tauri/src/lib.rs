@@ -26,7 +26,8 @@ mod prompt_files;
 mod provider;
 mod provider_defaults;
 mod proxy;
-mod services;
+pub mod sandbox;
+pub mod services;
 mod session_manager;
 mod settings;
 mod store;
@@ -49,6 +50,7 @@ pub use mcp::{
     sync_single_server_to_codex, sync_single_server_to_gemini,
 };
 pub use provider::{Provider, ProviderMeta};
+pub use services::profile;
 pub use services::{
     skill::{migrate_skills_to_ssot, ImportSkillSelection},
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
@@ -1346,6 +1348,42 @@ pub fn run() {
             commands::enter_lightweight_mode,
             commands::exit_lightweight_mode,
             commands::is_lightweight_mode,
+            // cc-launcher Profile (v11+)
+            commands::profile_list,
+            commands::profile_get,
+            commands::profile_create,
+            commands::profile_update,
+            commands::profile_delete,
+            commands::profile_activate,
+            commands::profile_get_active,
+            commands::profile_list_all_active,
+            commands::profile_list_mcp,
+            commands::profile_list_skills,
+            // cc-launcher System Probe (D-Probe / Task B4)
+            commands::probe_system,
+            commands::probe_auto_fix_candidates,
+            commands::apply_probe_fix,
+            // cc-launcher Installer (D5 / Task B2)
+            commands::detect_cli,
+            commands::detect_node,
+            commands::install_node,
+            commands::install_cli,
+            commands::uninstall_cli,
+            commands::smart_pick_registry,
+            // cc-launcher Sandbox (D3 / Task B3)
+            commands::sandbox_get_l1_rules,
+            commands::sandbox_set_l1_rule,
+            commands::sandbox_unlock_l1_rule,
+            commands::sandbox_list_l2_redlines,
+            commands::sandbox_check_redline_match,
+            commands::sandbox_get_level,
+            commands::sandbox_set_level,
+            commands::sandbox_get_audit_log,
+            // cc-launcher Launcher (D7 / Task B5) — 4 commands
+            commands::detect_terminals,
+            commands::start_cli,
+            commands::open_workdir,
+            commands::get_safety_summary,
         ]);
 
     let app = builder
