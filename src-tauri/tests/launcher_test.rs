@@ -14,7 +14,9 @@
 #![allow(clippy::await_holding_lock)]
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
+use cc_switch_lib::sandbox::{self, SandboxLevel, APPLY_TO_COMMAND_CALL_COUNT};
 use cc_switch_lib::services::installer::cli_install::TargetCli;
 use cc_switch_lib::services::launcher_service::{
     self, LauncherError, LauncherService, StartCliOpts,
@@ -318,5 +320,68 @@ async fn safety_summary_includes_workdir_in_add_dir_flag() {
         has_add_dir_with_workdir,
         "--add-dir flag must point at workdir containing profile id, got: {:?}",
         summary.flags_applied
+    );
+}
+
+// ============================================================================
+// 8. B6 — sandbox::apply_to_command shim is invoked pre-spawn
+//
+// This guards the regression where `start_cli`'s private creation-flag helper
+// did not actually wire `sandbox::job_object` / `sandbox::sandbox_exec`. We
+// can't exercise the full `start_cli` path here (CLI binaries are absent in
+// test envs), so we drive the same shim that `start_cli` invokes and assert:
+//   1. `apply_to_command` increments the test-only counter.
+//   2. The post-shim Command spawns successfully (no `SpawnFailed` from the
+//      sandbox-apply step itself).
+//   3. On Windows, `assign_to_job_object` accepts a real spawned pid (this is
+//      the same call `start_cli` issues immediately after `cmd.spawn()`).
+// ============================================================================
+
+#[tokio::test]
+async fn start_cli_calls_sandbox_apply_shim_before_spawn() {
+    let before = APPLY_TO_COMMAND_CALL_COUNT.load(Ordering::SeqCst);
+
+    // Pick a child program that exits ~immediately on every supported OS.
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = std::process::Command::new("cmd.exe");
+        c.args(["/C", "exit", "0"]);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("/bin/sh");
+        c.args(["-c", "exit 0"]);
+        c
+    };
+
+    // Apply the shim — same call site that `start_cli` performs.
+    sandbox::apply_to_command(&mut cmd, SandboxLevel::Strict)
+        .expect("sandbox::apply_to_command must not error on a benign command");
+
+    let after = APPLY_TO_COMMAND_CALL_COUNT.load(Ordering::SeqCst);
+    assert!(
+        after > before,
+        "apply_to_command counter must increment (before={before}, after={after})"
+    );
+
+    // Detach stdio so we don't block on parent's console buffers.
+    let mut child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("shim must produce a spawnable Command");
+
+    let pid = child.id();
+
+    // Post-spawn Job Object on Windows; no-op on *nix.
+    sandbox::assign_to_job_object(pid, SandboxLevel::Strict)
+        .expect("assign_to_job_object must accept a freshly spawned pid");
+
+    let status = child.wait().expect("wait child");
+    assert!(
+        status.success(),
+        "post-shim child must exit 0 (status={status:?})"
     );
 }

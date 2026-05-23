@@ -1,4 +1,14 @@
 import type { MockController, ScenarioId } from "../contracts";
+import {
+  cliStateReal,
+  installerReal,
+  launcherReal,
+  onboardingReal,
+  profileReal,
+  sandboxReal,
+  settingsReal,
+  systemProbeReal,
+} from "../real";
 import { installerMock } from "./installer";
 import { launcherMock } from "./launcher";
 import { onboardingMock } from "./onboarding";
@@ -19,55 +29,26 @@ import { systemProbeMock } from "./system-probe";
 
 function isMockMode(): boolean {
   try {
-    return import.meta.env?.VITE_MOCK_IPC === "1";
+    const flag = import.meta.env?.VITE_MOCK_IPC;
+    if (flag === "1") return true;
+    if (flag === "0") return false;
+    // Default: keep mock in dev (no Tauri runtime), real in prod build.
+    return import.meta.env?.DEV === true;
   } catch {
-    return false;
+    return true;
   }
-}
-
-const notImplemented = (name: string) => () => {
-  throw new Error(
-    `Real Tauri IPC not implemented yet (Phase B): ${name}. Set VITE_MOCK_IPC=1 to use mock.`,
-  );
-};
-
-function buildRealStub<T extends Record<string, unknown>>(
-  prefix: string,
-  shape: T,
-): T {
-  const out: Record<string, unknown> = {};
-  for (const key of Object.keys(shape)) {
-    out[key] = notImplemented(`${prefix}.${key}`);
-  }
-  return out as T;
 }
 
 const MOCK = isMockMode();
 
-export const installer = MOCK
-  ? installerMock
-  : buildRealStub("installer", installerMock);
-export const profile = MOCK
-  ? profileMock
-  : buildRealStub("profile", profileMock);
-export const cliState = MOCK
-  ? cliStateMock
-  : buildRealStub("cliState", cliStateMock);
-export const launcher = MOCK
-  ? launcherMock
-  : buildRealStub("launcher", launcherMock);
-export const systemProbe = MOCK
-  ? systemProbeMock
-  : buildRealStub("systemProbe", systemProbeMock);
-export const sandbox = MOCK
-  ? sandboxMock
-  : buildRealStub("sandbox", sandboxMock);
-export const onboarding = MOCK
-  ? onboardingMock
-  : buildRealStub("onboarding", onboardingMock);
-export const settings = MOCK
-  ? settingsMock
-  : buildRealStub("settings", settingsMock);
+export const installer = MOCK ? installerMock : installerReal;
+export const profile = MOCK ? profileMock : profileReal;
+export const cliState = MOCK ? cliStateMock : cliStateReal;
+export const launcher = MOCK ? launcherMock : launcherReal;
+export const systemProbe = MOCK ? systemProbeMock : systemProbeReal;
+export const sandbox = MOCK ? sandboxMock : sandboxReal;
+export const onboarding = MOCK ? onboardingMock : onboardingReal;
+export const settings = MOCK ? settingsMock : settingsReal;
 
 export const mockController: MockController = {
   setScenario(id: ScenarioId): void {

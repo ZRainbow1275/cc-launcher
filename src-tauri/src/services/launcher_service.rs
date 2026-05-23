@@ -252,9 +252,16 @@ impl LauncherService {
             term_cmd.env(k, v);
         }
 
-        // 10) Pre-spawn sandbox hardening (creation flags / pre_exec setsid). MUST be
-        // called before `spawn()` per the spec.
-        apply_sandbox_to_command(&mut term_cmd, sandbox_level);
+        // 10) Pre-spawn sandbox hardening:
+        //   - Windows: creation flags (CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP).
+        //   - macOS:   wrap argv with `sandbox-exec -f <profile>`.
+        //   - Linux:   pre_exec setsid.
+        // MUST be called before `spawn()` per the spec. Failure aborts the launch.
+        sandbox::apply_to_command(&mut term_cmd, sandbox_level).map_err(|e| {
+            LauncherError::SpawnFailed {
+                message: format!("sandbox apply: {e}"),
+            }
+        })?;
 
         // 11) Spawn detached.
         let child = term_cmd
@@ -267,6 +274,13 @@ impl LauncherService {
             })?;
         let pid = child.id();
 
+        // 11b) Post-spawn Windows Job Object binding. No-op on *nix.
+        if let Err(e) = sandbox::assign_to_job_object(pid, sandbox_level) {
+            return Err(LauncherError::SpawnFailed {
+                message: format!("sandbox apply (job object): {e}"),
+            });
+        }
+
         let safety = SafetySummary {
             sandbox_level: sandbox_level_to_marker(sandbox_level).to_string(),
             workdir: workdir.clone(),
@@ -275,7 +289,7 @@ impl LauncherService {
             redlines_active: true,
         };
 
-        // 12) Audit trail.
+        // 12) Audit trail — record that sandbox was applied (post-spawn).
         write_spawn_audit(
             &profile.id,
             opts.cli,
@@ -283,6 +297,7 @@ impl LauncherService {
             &workdir,
             &assembled.flags,
             pid,
+            /* sandbox_applied = */ true,
         );
 
         Ok(StartCliResult {
@@ -846,40 +861,6 @@ fn first_arg_basename(argv: &[String]) -> String {
 }
 
 // ----------------------------------------------------------------------------
-// Sandbox application & spawn detachment
-// ----------------------------------------------------------------------------
-
-#[cfg(target_os = "windows")]
-fn apply_sandbox_to_command(cmd: &mut Command, _level: SandboxLevel) {
-    use std::os::windows::process::CommandExt;
-    // CREATE_NEW_CONSOLE so the terminal owns its own console window (detached).
-    // 0x00000010 = CREATE_NEW_CONSOLE; 0x00000200 = CREATE_NEW_PROCESS_GROUP for clean ^C handling.
-    cmd.creation_flags(0x00000010 | 0x00000200);
-}
-
-#[cfg(not(target_os = "windows"))]
-fn apply_sandbox_to_command(cmd: &mut Command, _level: SandboxLevel) {
-    use std::os::unix::process::CommandExt;
-    // SAFETY: setsid is async-signal-safe. Calling it as the very first thing after fork
-    // detaches the new process from the controlling terminal, which is what we want for a
-    // "spawn a new terminal window" model.
-    unsafe {
-        cmd.pre_exec(|| {
-            let _ = libc_setsid();
-            Ok(())
-        });
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn libc_setsid() -> i64 {
-    extern "C" {
-        fn setsid() -> i64;
-    }
-    unsafe { setsid() }
-}
-
-// ----------------------------------------------------------------------------
 // Open workdir in OS file manager
 // ----------------------------------------------------------------------------
 
@@ -979,6 +960,7 @@ fn write_spawn_audit(
     workdir: &Path,
     flags: &[String],
     pid: u32,
+    sandbox_applied: bool,
 ) {
     let entry = AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
@@ -990,7 +972,12 @@ fn write_spawn_audit(
         pid: Some(pid),
         profile_id: Some(profile_id.to_string()),
         cwd: Some(workdir.display().to_string()),
-        note: Some(format!("terminal={}", terminal.as_wire())),
+        note: Some(format!(
+            "terminal={};sandbox_applied={}",
+            terminal.as_wire(),
+            sandbox_applied
+        )),
+        sandbox_applied: Some(sandbox_applied),
     };
     audit::append(&entry);
 }

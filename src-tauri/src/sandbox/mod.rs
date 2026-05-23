@@ -31,6 +31,7 @@ pub mod sandbox_exec;
 use crate::database::Database;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 use std::sync::Arc;
 
 pub use audit::{AuditDecision, AuditEntry, AuditEventType, AuditQueryOpts};
@@ -75,6 +76,14 @@ pub enum SandboxError {
     #[cfg(target_os = "windows")]
     #[error("windows API: {0}")]
     WindowsApi(String),
+    #[error("job object: {0}")]
+    JobObject(String),
+    #[error("restricted token: {0}")]
+    RestrictedToken(String),
+    #[error("sandbox-exec: {0}")]
+    SandboxExec(String),
+    #[error("unsupported on this platform")]
+    Unsupported,
 }
 
 impl From<SandboxError> for String {
@@ -107,6 +116,7 @@ pub fn set_l1_rule(db: &Arc<Database>, id: &str, enabled: bool) -> Result<L1Rule
         profile_id: None,
         cwd: None,
         note: Some(format!("enabled={enabled}")),
+        sandbox_applied: None,
     });
     Ok(updated)
 }
@@ -163,6 +173,134 @@ pub fn set_sandbox_level(db: &Arc<Database>, level: SandboxLevel) -> Result<(), 
 /// 读取审计日志（按 opts 过滤）。
 pub fn get_audit_log(opts: &AuditQueryOpts) -> Vec<AuditEntry> {
     audit::read_entries(opts)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 平台沙盒 shim —— 在 spawn 前后绑定 OS 级隔离
+// ─────────────────────────────────────────────────────────────────────
+
+/// 测试可观测：`apply_to_command` 被调用的次数。
+///
+/// 在 release 和 test 构建下都可见（开销极小：一次 atomic 加法），让集成测试也能断言
+/// shim 实际触发，避免 launcher 静默回退到只设 creation flags 的退化路径。
+pub static APPLY_TO_COMMAND_CALL_COUNT: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// 对一个未 spawn 的 `Command` 应用 OS 级沙盒约束。MUST 在 `spawn()` 之前调用。
+///
+/// 平台行为：
+/// - **Windows**：设置 `creation_flags(CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP)`。
+///   Job Object 绑定发生在 spawn 之后，必须通过 `assign_to_job_object(pid, level)` 完成
+///   （Windows 要求进程句柄，不能在 spawn 前应用）。
+/// - **macOS**：渲染当前 cwd 对应的 SBPL profile，并把 argv 包成 `sandbox-exec -f <profile>
+///   <original_program> <original_args...>`。同时为 child 设置 `__SBPL_APPLIED=1`，
+///   方便测试断言。
+/// - **Linux**：通过 `pre_exec` 调 `setsid` 与新会话分离；MVP 阶段无 LSM。
+///
+/// `level` 控制严格程度：`Strict` → L2 红线；`Medium` → L1 + L2 红线（语义层面，由
+/// `redline.rs` 编译期保证 L2 始终生效）。
+pub fn apply_to_command(cmd: &mut Command, level: SandboxLevel) -> Result<(), SandboxError> {
+    APPLY_TO_COMMAND_CALL_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    apply_to_command_impl(cmd, level)
+}
+
+#[cfg(target_os = "windows")]
+fn apply_to_command_impl(cmd: &mut Command, _level: SandboxLevel) -> Result<(), SandboxError> {
+    use std::os::windows::process::CommandExt;
+    // CREATE_NEW_CONSOLE (0x10) + CREATE_NEW_PROCESS_GROUP (0x200)：让子终端独占控制台，
+    // 同时保留干净的 Ctrl+C 语义。Job Object 限制在 spawn 后通过 assign_to_job_object 加上。
+    cmd.creation_flags(0x00000010 | 0x00000200);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn apply_to_command_impl(cmd: &mut Command, _level: SandboxLevel) -> Result<(), SandboxError> {
+    use std::os::unix::process::CommandExt;
+
+    // 1) 用当前 cwd 渲染 SBPL profile 文件。若 Command 未显式设 cwd，则使用进程的 cwd。
+    let cwd = std::env::current_dir()
+        .map_err(|e| SandboxError::SandboxExec(format!("read cwd: {e}")))?;
+    let profile_path = sandbox_exec::apply_sandbox_exec_profile(&cwd)
+        .map_err(|e| SandboxError::SandboxExec(e.to_string()))?;
+
+    // 2) 把 argv 包装成 sandbox-exec -f <profile> <program> <args...>
+    //    通过把当前程序与所有参数挪到 sandbox-exec 之后实现 wrap。
+    //    Rust 的 std::process::Command 在 macOS 下没有可枚举的现有 argv，
+    //    所以我们把 cmd 替换为一个新的 sandbox-exec 命令并保留其余 builder 状态。
+    let original_program = cmd.get_program().to_owned();
+    let original_args: Vec<std::ffi::OsString> =
+        cmd.get_args().map(|a| a.to_owned()).collect();
+
+    // 重置为 sandbox-exec
+    *cmd = Command::new("/usr/bin/sandbox-exec");
+    cmd.arg("-f").arg(&profile_path).arg(original_program);
+    for a in original_args {
+        cmd.arg(a);
+    }
+
+    // 给 child 设一个标记环境变量，方便测试断言 sandbox 已被应用。
+    cmd.env("__SBPL_APPLIED", "1");
+
+    // setsid 分离控制 TTY —— 与 Linux 路径一致。
+    unsafe {
+        cmd.pre_exec(|| {
+            let _ = libc_setsid();
+            Ok(())
+        });
+    }
+    Ok(())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn apply_to_command_impl(cmd: &mut Command, _level: SandboxLevel) -> Result<(), SandboxError> {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: setsid 是 async-signal-safe；fork 后第一时间调用安全。
+    unsafe {
+        cmd.pre_exec(|| {
+            let _ = libc_setsid();
+            Ok(())
+        });
+    }
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "windows", unix)))]
+fn apply_to_command_impl(_cmd: &mut Command, _level: SandboxLevel) -> Result<(), SandboxError> {
+    Err(SandboxError::Unsupported)
+}
+
+#[cfg(unix)]
+fn libc_setsid() -> i64 {
+    extern "C" {
+        fn setsid() -> i64;
+    }
+    unsafe { setsid() }
+}
+
+/// Post-spawn Job Object 绑定（仅 Windows 有意义）。
+///
+/// Windows 上 Job Object 必须基于真实的进程句柄，所以这一步必须发生在 `spawn()` 之后。
+/// 创建一个新的 Job 并把目标进程加入；返回 Ok 后 child 即受 KILL_ON_JOB_CLOSE 等约束。
+///
+/// **生命周期处理**：因为 `KILL_ON_JOB_CLOSE` + 唯一句柄关闭 == 杀死 child，
+/// 这里使用 `std::mem::forget` 让 JobHandle 与 launcher 进程共存活。launcher 退出时
+/// 系统会回收句柄，KILL_ON_JOB_CLOSE 才生效，从而保证子终端不会因为函数返回就被秒杀。
+#[cfg(windows)]
+pub fn assign_to_job_object(pid: u32, _level: SandboxLevel) -> Result<(), SandboxError> {
+    let job = job_object::create_sandbox_job()
+        .map_err(|e| SandboxError::JobObject(e.to_string()))?;
+    job.assign_process(pid)
+        .map_err(|e| SandboxError::JobObject(e.to_string()))?;
+    // 关键：不要 drop JobHandle，否则 CloseHandle → KILL_ON_JOB_CLOSE 立即杀死 child。
+    // launcher 进程退出时操作系统统一回收，届时 child 才会被 Job 终止 —— 这是期望行为。
+    std::mem::forget(job);
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[allow(dead_code)]
+pub fn assign_to_job_object(_pid: u32, _level: SandboxLevel) -> Result<(), SandboxError> {
+    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────

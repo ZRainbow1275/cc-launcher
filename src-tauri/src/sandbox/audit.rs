@@ -79,6 +79,10 @@ pub struct AuditEntry {
     pub cwd: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// 是否在 spawn 前后成功应用了 OS 沙盒 shim（B6 引入）。
+    /// 仅 `event_type = sandbox_spawn` 时由 launcher_service 写入；其他事件保持 None。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_applied: Option<bool>,
 }
 
 impl AuditEntry {
@@ -95,6 +99,7 @@ impl AuditEntry {
             profile_id: None,
             cwd: None,
             note: None,
+            sandbox_applied: None,
         }
     }
 
@@ -110,6 +115,7 @@ impl AuditEntry {
             profile_id: None,
             cwd: None,
             note: None,
+            sandbox_applied: None,
         }
     }
 
@@ -125,6 +131,7 @@ impl AuditEntry {
             profile_id: None,
             cwd: None,
             note: None,
+            sandbox_applied: None,
         }
     }
 
@@ -140,6 +147,7 @@ impl AuditEntry {
             profile_id: None,
             cwd: None,
             note: Some(new_level.into()),
+            sandbox_applied: None,
         }
     }
 }
