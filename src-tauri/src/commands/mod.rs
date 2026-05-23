@@ -14,6 +14,7 @@ mod hermes;
 mod import_export;
 mod installer_commands;
 mod launcher;
+pub mod launcher_wire;
 mod mcp;
 mod misc;
 mod model_fetch;
@@ -33,6 +34,7 @@ mod subscription;
 mod sync_support;
 
 mod lightweight;
+mod onboarding_settings;
 mod sandbox_commands;
 mod usage;
 mod webdav_sync;
@@ -70,6 +72,7 @@ pub use stream_check::*;
 pub use subscription::*;
 
 pub use lightweight::*;
+pub use onboarding_settings::*;
 pub use sandbox_commands::*;
 pub use usage::*;
 pub use webdav_sync::*;

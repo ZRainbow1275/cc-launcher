@@ -16,6 +16,7 @@
 
 use crate::database::Database;
 use crate::sandbox::SandboxError;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -38,7 +39,13 @@ pub enum L1Category {
 }
 
 /// L1 软拦截规则（可被 expert 模式临时解锁）。
+///
+/// Serialized as camelCase with ISO 8601 datetime fields, matching
+/// `contracts.ts::L1Rule`. Storage uses `DateTime<Utc>`; corrupt or legacy
+/// entries (e.g. old i64 epoch ms storage) are reset to defaults by
+/// [`L1Store::list`] so the on-disk format always matches the public schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct L1Rule {
     pub id: String,
     pub category: L1Category,
@@ -51,31 +58,28 @@ pub struct L1Rule {
     pub enabled: bool,
     /// 是否允许被 expert 模式临时解锁；少数高危规则永远不能解锁。
     pub unlockable: bool,
-    /// 临时解锁的失效时间戳（毫秒 epoch），None 表示未临时解锁。
-    pub unlocked_until: Option<i64>,
-    /// 最近一次状态变更时间（毫秒 epoch）。
-    pub updated_at: i64,
+    /// 临时解锁的失效时间；None 表示未临时解锁。
+    pub unlocked_until: Option<DateTime<Utc>>,
+    /// 最近一次状态变更时间。
+    pub updated_at: DateTime<Utc>,
 }
 
 /// 解锁尝试的结果。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UnlockResult {
     pub rule_id: String,
     pub success: bool,
-    pub unlocked_until: Option<i64>,
+    pub unlocked_until: Option<DateTime<Utc>>,
 }
 
-fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+fn now() -> DateTime<Utc> {
+    Utc::now()
 }
 
 /// 出厂默认 L1 规则 (7 条)，按 PRD §D3 + research §L1 enforcement matrix 编写。
 pub fn default_rules() -> Vec<L1Rule> {
-    let ts = now_ms();
+    let ts = now();
     vec![
         L1Rule {
             id: "L1.rm_arbitrary".to_string(),
@@ -187,11 +191,11 @@ impl L1Store {
             match serde_json::from_str::<Vec<L1Rule>>(&json) {
                 Ok(mut rules) => {
                     // 清理已过期的临时解锁戳
-                    let now = now_ms();
+                    let now_ts = now();
                     let mut dirty = false;
                     for r in rules.iter_mut() {
                         if let Some(until) = r.unlocked_until {
-                            if until <= now {
+                            if until <= now_ts {
                                 r.unlocked_until = None;
                                 dirty = true;
                             }
@@ -203,7 +207,8 @@ impl L1Store {
                     Ok(rules)
                 }
                 Err(_) => {
-                    // 损坏 → 重置为默认，避免完全启动不了
+                    // 损坏（含旧格式 i64 epoch ms）→ 重置为默认。
+                    // 24h 临时解锁状态属于易失数据，丢失可接受。
                     let defaults = default_rules();
                     self.save(&defaults)?;
                     Ok(defaults)
@@ -237,7 +242,7 @@ impl L1Store {
         }
 
         rules[idx].enabled = enabled;
-        rules[idx].updated_at = now_ms();
+        rules[idx].updated_at = now();
         // 切换状态时清理临时解锁
         if enabled {
             rules[idx].unlocked_until = None;
@@ -264,9 +269,10 @@ impl L1Store {
             return Err(SandboxError::InvalidUnlockKeyword);
         }
 
-        let until = now_ms() + UNLOCK_DURATION_MS;
+        let now_ts = now();
+        let until = now_ts + chrono::Duration::milliseconds(UNLOCK_DURATION_MS);
         rules[idx].unlocked_until = Some(until);
-        rules[idx].updated_at = now_ms();
+        rules[idx].updated_at = now_ts;
         self.save(&rules)?;
 
         Ok(UnlockResult {
@@ -339,10 +345,10 @@ mod tests {
             .expect("unlock sudo_runas");
         assert!(res.success);
         let until = res.unlocked_until.expect("unlocked_until set");
-        let now = now_ms();
-        assert!(until > now);
+        let now_ts = now();
+        assert!(until > now_ts);
         // 至少应该是 23.5h 后到期
-        assert!(until - now > 23 * 60 * 60 * 1000);
+        assert!((until - now_ts).num_milliseconds() > 23 * 60 * 60 * 1000);
     }
 
     #[test]
@@ -380,7 +386,7 @@ mod tests {
         // 注入一个已过期的 unlocked_until
         let mut rules = store.list().expect("seed");
         let idx = rules.iter().position(|r| r.id == "L1.sudo_runas").unwrap();
-        rules[idx].unlocked_until = Some(now_ms() - 1_000);
+        rules[idx].unlocked_until = Some(now() - chrono::Duration::seconds(1));
         store.save(&rules).expect("save");
 
         let rules = store.list().expect("re-list");

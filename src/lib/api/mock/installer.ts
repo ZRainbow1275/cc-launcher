@@ -307,73 +307,8 @@ export const installerMock = {
     return gen();
   },
 
-  install_git(): AsyncIterable<InstallProgress> {
-    const state = getState();
-    const stepDelay = 200;
-    async function* gen(): AsyncGenerator<InstallProgress, void, void> {
-      const events: InstallProgress[] = [];
-      const emit = (p: InstallProgress) => events.push(p);
-
-      if (!state.networkAvailable || shouldFail(DOMAIN, "install_git")) {
-        await progress(
-          emit,
-          {
-            phase: "failed",
-            message: messages.installerFailedNetwork,
-            error: errors.networkUnreachable,
-          },
-          0,
-        );
-        for (const e of events.splice(0)) yield e;
-        return;
-      }
-
-      await progress(
-        emit,
-        {
-          phase: "probing-registry",
-          message: messages.installerProbingRegistry,
-          percent: 10,
-        },
-        stepDelay,
-      );
-      for (const e of events.splice(0)) yield e;
-      await progress(
-        emit,
-        {
-          phase: "installing-cli",
-          message: messages.installerInstallingCli,
-          percent: 60,
-        },
-        stepDelay,
-      );
-      for (const e of events.splice(0)) yield e;
-      await progress(
-        emit,
-        {
-          phase: "validating",
-          message: messages.installerValidating,
-          percent: 90,
-        },
-        stepDelay,
-      );
-      for (const e of events.splice(0)) yield e;
-
-      state.gitInstalled = true;
-
-      await progress(
-        emit,
-        {
-          phase: "completed",
-          message: messages.installerCompleted,
-          percent: 100,
-        },
-        0,
-      );
-      for (const e of events.splice(0)) yield e;
-    }
-    return gen();
-  },
+  // install_git removed in D-10 — Git install flows through
+  // `systemProbe.apply_fix({ kind: "installGit" })`. See phase-c-parity.md §C.
 };
 
 export type InstallerMock = typeof installerMock;

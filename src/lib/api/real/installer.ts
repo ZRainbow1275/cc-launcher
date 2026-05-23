@@ -58,41 +58,13 @@ export const installerReal = {
     return handle.iterable;
   },
 
-  install_git(): AsyncIterable<InstallProgress> {
-    // No backend twin yet — see phase-c-parity.md §C deltas.
-    async function* gen(): AsyncGenerator<InstallProgress, void, void> {
-      yield InstallProgress.parse({
-        phase: "failed",
-        message: {
-          zh: "尚未实现：install_git",
-          en: "Not implemented yet: install_git",
-          ja: "未実装: install_git",
-        },
-        error: {
-          code: "NOT_IMPLEMENTED",
-          message: {
-            zh: "后端 install_git 命令尚未实现",
-            en: "Backend install_git command is not implemented",
-            ja: "バックエンドの install_git コマンドは未実装です",
-          },
-          retryable: false,
-        },
-      });
-    }
-    return gen();
-  },
+  // install_git removed in D-10 — Git install flows through
+  // `systemProbe.apply_fix({ kind: "installGit" })`. See phase-c-parity.md §C.
 
   async uninstall_cli(cli: TargetCli): Promise<OperationResult> {
     TargetCli.parse(cli);
-    try {
-      await invoke<void>("uninstall_cli", { cli });
-      return OperationResult.parse({ success: true });
-    } catch (err) {
-      return OperationResult.parse({
-        success: false,
-        errorCode: typeof err === "string" ? err : "UNINSTALL_FAILED",
-      });
-    }
+    const raw = await invoke<unknown>("uninstall_cli", { cli });
+    return OperationResult.parse(raw);
   },
 
   async smart_pick_registry(): Promise<RegistryPickResult> {

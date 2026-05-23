@@ -11,6 +11,7 @@ use crate::services::installer::cli_install::{CliInstallStatus, InstallOpts, Tar
 use crate::services::installer::node_runtime::{InstallProgress, NodeStatus};
 use crate::services::installer::registry_probe::RegistryPickResult;
 use crate::services::installer_service::{InstallerError, InstallerService};
+use crate::types::OperationResult;
 
 /// Detect whether a CLI is installed under the private prefix.
 #[tauri::command]
@@ -60,8 +61,9 @@ pub async fn install_cli(
 
 /// Uninstall a CLI (idempotent — non-existent prefix is a no-op).
 #[tauri::command]
-pub async fn uninstall_cli(cli: TargetCli) -> Result<(), InstallerError> {
-    InstallerService::uninstall_cli(cli)
+pub async fn uninstall_cli(cli: TargetCli) -> Result<OperationResult, InstallerError> {
+    InstallerService::uninstall_cli(cli)?;
+    Ok(OperationResult::ok())
 }
 
 /// Pick the lowest-latency npm registry across the 4-mirror whitelist.

@@ -16,6 +16,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 
 use crate::services::probe::{env as env_probe, fix_actions, network, runtime, system, workdir};
+use crate::types::{LocalizedString, TypedError};
 
 /// Three-color + missing/unknown status used by every probe dimension.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -84,20 +85,22 @@ pub struct SystemProbeReport {
     pub probe_version: u32,
 }
 
-/// Progress event emitted by [`apply_fix`].
-///
-/// Mirrors `FixProgress` in the frontend contract. The fields here are
-/// intentionally lighter than `FixProgress` because Rust never produces a
-/// `LocalizedString`/`TypedError`; the Tauri command boundary serializes
-/// to a `messageKey` + `errorCode` that the frontend localizes itself.
+/// Progress event emitted by [`apply_fix`]. Mirrors `FixProgress` in the
+/// frontend contract — `message` is a structured `LocalizedString` and
+/// `error` is a structured `TypedError`. The backend constructs both from
+/// existing i18n keys + error codes; the key itself doubles as the fallback
+/// text for all three locales so callers can substitute translations
+/// without losing information when a key is missing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FixProgress {
     pub fix_id: String,
     pub phase: FixPhase,
-    pub message_key: String,
+    pub message: LocalizedString,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub percent: Option<u8>,
-    pub error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<TypedError>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -210,6 +213,17 @@ pub async fn run_probe() -> Result<SystemProbeReport, ProbeError> {
     })
 }
 
+/// Build a `LocalizedString` from an i18n key. The key doubles as the
+/// fallback for every locale so the frontend can substitute the translation
+/// without losing information when a key is missing.
+fn localize_key(key: &str) -> LocalizedString {
+    LocalizedString {
+        zh: key.to_string(),
+        en: key.to_string(),
+        ja: key.to_string(),
+    }
+}
+
 /// Apply a [`FixAction`] and stream [`FixProgress`] events on the returned
 /// channel. The receiver is closed when the action terminates (either
 /// `Completed` or `Failed`).
@@ -218,16 +232,18 @@ pub fn apply_fix(action: FixAction) -> mpsc::UnboundedReceiver<FixProgress> {
     let fix_id = fix_id_for(&action);
 
     tokio::spawn(async move {
-        let send =
-            |phase: FixPhase, message_key: &str, percent: Option<u8>, err: Option<String>| {
-                let _ = tx.send(FixProgress {
-                    fix_id: fix_id.clone(),
-                    phase,
-                    message_key: message_key.to_string(),
-                    percent,
-                    error_code: err,
-                });
-            };
+        let send = |phase: FixPhase,
+                    message_key: &str,
+                    percent: Option<u8>,
+                    error: Option<TypedError>| {
+            let _ = tx.send(FixProgress {
+                fix_id: fix_id.clone(),
+                phase,
+                message: localize_key(message_key),
+                percent,
+                error,
+            });
+        };
 
         send(FixPhase::Starting, "fix.starting", Some(5), None);
         send(FixPhase::Running, "fix.running", Some(50), None);
@@ -240,12 +256,14 @@ pub fn apply_fix(action: FixAction) -> mpsc::UnboundedReceiver<FixProgress> {
                 send(FixPhase::Completed, "fix.completed", Some(100), None);
             }
             Err(e) => {
-                send(
-                    FixPhase::Failed,
-                    "fix.failed",
-                    None,
-                    Some(e.code().to_string()),
-                );
+                let code = e.code().to_string();
+                let typed = TypedError {
+                    code: code.clone(),
+                    message: localize_key(&code),
+                    cause: Some(e.to_string()),
+                    retryable: false,
+                };
+                send(FixPhase::Failed, "fix.failed", None, Some(typed));
                 log::warn!("apply_fix failed: action={action:?}, error={e}");
             }
         }

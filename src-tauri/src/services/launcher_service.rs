@@ -425,8 +425,7 @@ fn collect_unlocked_l1_ids(db: &Arc<Database>) -> BTreeSet<String> {
                     return true;
                 }
                 if let Some(until) = r.unlocked_until {
-                    let now = chrono::Utc::now().timestamp_millis();
-                    return until > now;
+                    return until > chrono::Utc::now();
                 }
                 false
             })

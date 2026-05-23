@@ -51,18 +51,11 @@ export const profileReal = {
 
   async delete(id: string, target_cli: TargetCli): Promise<OperationResult> {
     TargetCli.parse(target_cli);
-    try {
-      const ok = await invoke<boolean>("profile_delete", {
-        id,
-        targetCli: target_cli,
-      });
-      return OperationResult.parse({ success: ok });
-    } catch (err) {
-      return OperationResult.parse({
-        success: false,
-        errorCode: typeof err === "string" ? err : "PROFILE_DELETE_FAILED",
-      });
-    }
+    const raw = await invoke<unknown>("profile_delete", {
+      id,
+      targetCli: target_cli,
+    });
+    return OperationResult.parse(raw);
   },
 
   async activate(id: string, target_cli: TargetCli): Promise<SwitchResult> {
@@ -75,14 +68,18 @@ export const profileReal = {
   },
 };
 
+interface ProfileQueryResult {
+  profile: unknown;
+}
+
 export const cliStateReal = {
   async get_active(target_cli: TargetCli): Promise<string | null> {
     TargetCli.parse(target_cli);
-    const raw = await invoke<unknown>("profile_get_active", {
+    const raw = await invoke<ProfileQueryResult>("profile_get_active", {
       targetCli: target_cli,
     });
-    if (raw == null) return null;
-    const parsed = Profile.parse(raw);
+    if (raw.profile == null) return null;
+    const parsed = Profile.parse(raw.profile);
     return parsed.id;
   },
 

@@ -732,6 +732,38 @@ function App() {
     };
   }, [t]);
 
+  // D-9: Listen for profile-changed → invalidate profile query caches.
+  // Skip when running pure VITE_MOCK_IPC dev (no Tauri runtime); vitest mocks
+  // `@tauri-apps/api/event` directly so the listener still wires up there.
+  useEffect(() => {
+    if (import.meta.env?.VITE_MOCK_IPC === "1") return;
+    let unsubscribe: (() => void) | undefined;
+    let active = true;
+
+    const setup = async () => {
+      try {
+        const off = await listen("profile-changed", () => {
+          void queryClient.invalidateQueries({ queryKey: ["profile"] });
+          void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+          void queryClient.invalidateQueries({ queryKey: ["activeProfile"] });
+        });
+        if (!active) {
+          off();
+          return;
+        }
+        unsubscribe = off;
+      } catch (error) {
+        console.error("[App] Failed to subscribe profile-changed event", error);
+      }
+    };
+
+    void setup();
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [queryClient]);
+
   useEffect(() => {
     let active = true;
     let unlistenResize: (() => void) | undefined;

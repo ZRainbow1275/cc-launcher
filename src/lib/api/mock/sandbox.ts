@@ -12,6 +12,23 @@ import { getState } from "./scenarios";
 
 const DOMAIN = "sandbox";
 
+/** D-11: response shape for `sandbox_check_redline_match`. */
+export interface RedlineMatchResult {
+  matched: false;
+  ruleId?: undefined;
+  pattern?: undefined;
+}
+
+/** D-11: response shape for `sandbox_get_audit_log`. */
+export interface AuditEntry {
+  id: string;
+  timestamp: string;
+  category: string;
+  command: string;
+  cwd: string;
+  outcome: "blocked" | "warned" | "allowed";
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -144,6 +161,33 @@ export const sandboxMock = {
     await delay();
     getState().sandboxLevel = level;
     return OperationResult.parse({ success: true });
+  },
+
+  // D-11: backend `sandbox_check_redline_match` parity. The real backend runs
+  // the actual regex/substring match; the mock always reports "no match" so
+  // vitest scenarios stay deterministic.
+  async check_redline_match(
+    _arg: string,
+    _cwd: string,
+  ): Promise<RedlineMatchResult> {
+    if (shouldFail(DOMAIN, "check_redline_match"))
+      throw errors.networkUnreachable;
+    await delay();
+    return { matched: false };
+  },
+
+  // D-11: backend `sandbox_get_audit_log` parity. Mock returns an empty log
+  // by default; scenarios can extend `getState().sandboxAuditLog` later.
+  async get_audit_log(limit?: number): Promise<AuditEntry[]> {
+    if (shouldFail(DOMAIN, "get_audit_log")) throw errors.networkUnreachable;
+    await delay();
+    const seeded = (getState() as unknown as { sandboxAuditLog?: AuditEntry[] })
+      .sandboxAuditLog;
+    const entries: AuditEntry[] = Array.isArray(seeded) ? seeded : [];
+    if (typeof limit === "number" && limit >= 0) {
+      return entries.slice(0, limit);
+    }
+    return entries;
   },
 };
 

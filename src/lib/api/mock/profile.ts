@@ -13,6 +13,22 @@ import { getState } from "./scenarios";
 
 const DOMAIN = "profile";
 
+/** Backend `ProfileMcpEntry` shape — see `src-tauri/src/services/profile.rs`. */
+export interface McpRef {
+  profile_id: string;
+  target_cli: TargetCli;
+  mcp_id: string;
+  sort_index: number;
+}
+
+/** Backend `ProfileSkillEntry` shape — see `src-tauri/src/services/profile.rs`. */
+export interface SkillRef {
+  profile_id: string;
+  target_cli: TargetCli;
+  skill_id: string;
+  sort_index: number;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -164,6 +180,43 @@ export const profileMock = {
       backupDir: `~/.cc-switch/backups/profile-switch-${Date.now()}`,
       switchedAt: nowIso(),
     });
+  },
+
+  // D-11: backend `profile_list_mcp` parity — mock returns empty by default.
+  async list_mcp(profile_id: string, target_cli: TargetCli): Promise<McpRef[]> {
+    TargetCli.parse(target_cli);
+    if (shouldFail(DOMAIN, "list_mcp")) throw errors.networkUnreachable;
+    await delay();
+    const found = getState().profiles.find(
+      (p) => p.id === profile_id && p.target_cli === target_cli,
+    );
+    if (!found) return [];
+    return found.mcp_ids.map((mcp_id, sort_index) => ({
+      profile_id,
+      target_cli,
+      mcp_id,
+      sort_index,
+    }));
+  },
+
+  // D-11: backend `profile_list_skills` parity — mock returns empty by default.
+  async list_skills(
+    profile_id: string,
+    target_cli: TargetCli,
+  ): Promise<SkillRef[]> {
+    TargetCli.parse(target_cli);
+    if (shouldFail(DOMAIN, "list_skills")) throw errors.networkUnreachable;
+    await delay();
+    const found = getState().profiles.find(
+      (p) => p.id === profile_id && p.target_cli === target_cli,
+    );
+    if (!found) return [];
+    return found.skill_ids.map((skill_id, sort_index) => ({
+      profile_id,
+      target_cli,
+      skill_id,
+      sort_index,
+    }));
   },
 };
 

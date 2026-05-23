@@ -7,7 +7,6 @@
 //!
 //! 切换成功后通过 `profile-changed` 事件通知前端失效查询缓存。
 
-use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::services::profile::{
@@ -15,10 +14,24 @@ use crate::services::profile::{
     ProfileSkillEntry, ProfileUpdatePayload, TargetCli,
 };
 use crate::store::AppState;
+#[allow(unused_imports)]
+use crate::types::{OperationResult, ProfileQueryResult};
 
 /// 包装：将 TargetCli 字符串映射为强类型
 fn parse_cli(s: &str) -> Result<TargetCli, String> {
     TargetCli::from_str_strict(s).map_err(|e| e.to_string())
+}
+
+/// 最佳努力发射 profile-changed 事件 —— 失败不影响命令成功。
+fn emit_profile_changed(app: &AppHandle, cli: &str, profile_id: &str, kind: &str) {
+    let _ = app.emit(
+        "profile-changed",
+        serde_json::json!({
+            "cli": cli,
+            "profile_id": profile_id,
+            "kind": kind,
+        }),
+    );
 }
 
 #[tauri::command]
@@ -47,9 +60,12 @@ pub fn profile_get(
 #[tauri::command]
 pub fn profile_create(
     payload: ProfileCreatePayload,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Profile, String> {
-    profile::create_profile(&state.db, payload).map_err(|e| e.to_string())
+    let created = profile::create_profile(&state.db, payload).map_err(|e| e.to_string())?;
+    emit_profile_changed(&app, created.target_cli.as_str(), &created.id, "created");
+    Ok(created)
 }
 
 #[tauri::command]
@@ -57,28 +73,27 @@ pub fn profile_update(
     id: String,
     target_cli: String,
     payload: ProfileUpdatePayload,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Profile, String> {
     let cli = parse_cli(&target_cli)?;
-    profile::update_profile(&state.db, &id, cli, payload).map_err(|e| e.to_string())
+    let updated =
+        profile::update_profile(&state.db, &id, cli, payload).map_err(|e| e.to_string())?;
+    emit_profile_changed(&app, cli.as_str(), &updated.id, "updated");
+    Ok(updated)
 }
 
 #[tauri::command]
 pub fn profile_delete(
     id: String,
     target_cli: String,
+    app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<bool, String> {
+) -> Result<OperationResult, String> {
     let cli = parse_cli(&target_cli)?;
     profile::delete_profile(&state.db, &id, cli).map_err(|e| e.to_string())?;
-    Ok(true)
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProfileChangedEvent {
-    target_cli: String,
-    profile_id: String,
+    emit_profile_changed(&app, cli.as_str(), &id, "deleted");
+    Ok(OperationResult::ok())
 }
 
 #[tauri::command]
@@ -91,15 +106,9 @@ pub fn profile_activate(
     let cli = parse_cli(&target_cli)?;
     let result = profile::activate_profile(&state.db, &id, cli).map_err(|e| e.to_string())?;
 
-    // Phase 4 invalidate_runtime —— 通知前端失效查询缓存
+    // Phase 4 invalidate_runtime —— 通知前端失效查询缓存（best-effort）。
     if result.success {
-        let payload = ProfileChangedEvent {
-            target_cli: target_cli.clone(),
-            profile_id: id.clone(),
-        };
-        if let Err(e) = app.emit("profile-changed", payload) {
-            log::warn!("emit profile-changed 失败: {e}");
-        }
+        emit_profile_changed(&app, cli.as_str(), &id, "activated");
     }
 
     Ok(result)
@@ -109,9 +118,10 @@ pub fn profile_activate(
 pub fn profile_get_active(
     target_cli: String,
     state: State<'_, AppState>,
-) -> Result<Option<Profile>, String> {
+) -> Result<ProfileQueryResult, String> {
     let cli = parse_cli(&target_cli)?;
-    profile::get_active_profile(&state.db, cli).map_err(|e| e.to_string())
+    let profile = profile::get_active_profile(&state.db, cli).map_err(|e| e.to_string())?;
+    Ok(ProfileQueryResult::new(profile))
 }
 
 #[tauri::command]

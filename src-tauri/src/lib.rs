@@ -6,6 +6,12 @@ mod claude_mcp;
 mod claude_plugin;
 mod codex_config;
 mod commands;
+/// Re-export the D-5 launcher wire DTOs for integration tests at
+/// `tests/launcher_wire_test.rs`. Internal cmd handlers continue to access
+/// the module via the private `commands::launcher_wire` path.
+pub mod launcher_wire {
+    pub use crate::commands::launcher_wire::*;
+}
 mod config;
 mod database;
 mod deeplink;
@@ -31,6 +37,7 @@ pub mod services;
 mod session_manager;
 mod settings;
 mod store;
+mod types;
 
 mod tray;
 mod usage_script;
@@ -1384,6 +1391,14 @@ pub fn run() {
             commands::start_cli,
             commands::open_workdir,
             commands::get_safety_summary,
+            // cc-launcher Onboarding/Settings (D4) — 7 commands
+            commands::onboarding_get_state,
+            commands::onboarding_complete,
+            commands::settings_get_ui_mode,
+            commands::settings_set_ui_mode,
+            commands::settings_get_locale,
+            commands::settings_set_locale,
+            commands::install_git,
         ]);
 
     let app = builder

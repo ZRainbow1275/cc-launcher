@@ -7,10 +7,9 @@
 
 #![allow(non_snake_case)]
 
-use crate::sandbox::{
-    self, AuditEntry, AuditQueryOpts, L1Rule, L2RedlineDto, SandboxLevel, UnlockResult,
-};
+use crate::sandbox::{self, AuditEntry, AuditQueryOpts, L1Rule, L2RedlineDto, SandboxLevel};
 use crate::store::AppState;
+use crate::types::OperationResult;
 use serde::Serialize;
 use tauri::State;
 
@@ -38,13 +37,17 @@ pub async fn sandbox_set_l1_rule(
     sandbox::set_l1_rule(&state.db, &rule_id, enabled).map_err(Into::into)
 }
 
+/// Unlock an L1 rule with the 24h keyword. Returns `OperationResult` on
+/// success; the frontend refetches via `sandbox_get_l1_rules` to pick up
+/// the updated `unlockedUntil` timestamp on the affected rule.
 #[tauri::command]
 pub async fn sandbox_unlock_l1_rule(
     state: State<'_, AppState>,
     rule_id: String,
     keyword: String,
-) -> Result<UnlockResult, String> {
-    sandbox::unlock_l1_rule(&state.db, &rule_id, &keyword).map_err(Into::into)
+) -> Result<OperationResult, String> {
+    sandbox::unlock_l1_rule(&state.db, &rule_id, &keyword).map_err(String::from)?;
+    Ok(OperationResult::ok())
 }
 
 #[tauri::command]
@@ -70,15 +73,17 @@ pub async fn sandbox_get_level(state: State<'_, AppState>) -> Result<String, Str
 }
 
 #[tauri::command]
-pub async fn sandbox_set_level(state: State<'_, AppState>, level: String) -> Result<bool, String> {
+pub async fn sandbox_set_level(
+    state: State<'_, AppState>,
+    level: String,
+) -> Result<OperationResult, String> {
     let parsed = match level.as_str() {
         "strict" => SandboxLevel::Strict,
         "medium" => SandboxLevel::Medium,
         _ => return Err(format!("invalid sandbox level: {level}")),
     };
-    sandbox::set_sandbox_level(&state.db, parsed)
-        .map(|_| true)
-        .map_err(Into::into)
+    sandbox::set_sandbox_level(&state.db, parsed).map_err(String::from)?;
+    Ok(OperationResult::ok())
 }
 
 #[tauri::command]
