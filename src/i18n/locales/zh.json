@@ -2886,7 +2886,8 @@
       "cwd": "CWD 锁定路径",
       "l1Count": "L1 软拦截规则：已启用 {{count}} 条",
       "l2Count": "L2 硬红线：永不可关闭 {{count}} 条",
-      "loading": "加载中..."
+      "loading": "加载中...",
+      "noActiveProfile": "先激活 Profile 才能查看安全配置"
     },
     "launchButton": "一键启动",
     "launching": "正在拉起终端...",

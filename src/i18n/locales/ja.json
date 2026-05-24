@@ -2886,7 +2886,8 @@
       "cwd": "CWD ロックパス",
       "l1Count": "L1 ソフトルール：有効 {{count}} 件",
       "l2Count": "L2 ハードレッドライン：解除不可 {{count}} 件",
-      "loading": "読み込み中..."
+      "loading": "読み込み中...",
+      "noActiveProfile": "Profile を有効化してから安全設定を確認してください"
     },
     "launchButton": "ワンクリック起動",
     "launching": "ターミナルを起動中...",

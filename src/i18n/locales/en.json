@@ -2886,7 +2886,8 @@
       "cwd": "CWD lock path",
       "l1Count": "L1 soft rules: {{count}} active",
       "l2Count": "L2 hard redlines: {{count}} never disable-able",
-      "loading": "Loading..."
+      "loading": "Loading...",
+      "noActiveProfile": "Activate a Profile first to view safety configuration"
     },
     "launchButton": "Launch",
     "launching": "Spawning terminal...",

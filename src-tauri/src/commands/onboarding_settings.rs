@@ -24,6 +24,13 @@ const LOCALE_KEY: &str = "cc_launcher.locale";
 const DEFAULT_UI_MODE: UiMode = UiMode::Novice;
 const DEFAULT_LOCALE: Locale = Locale::En;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PreferredCli {
+    Claude,
+    Codex,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct OnboardingAnswers {
@@ -31,6 +38,9 @@ pub struct OnboardingAnswers {
     pub ui_mode: UiMode,
     pub enable_sandbox: bool,
     pub accepted_redlines: bool,
+    // TODO(E1-M5): tighten to Option<PreferredCli> once the protected
+    // tests/onboarding_settings_test.rs is unfrozen — currently it constructs
+    // this field with a raw string literal which would fail to compile.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_cli: Option<String>,
 }
@@ -114,7 +124,7 @@ fn onboarding_complete_internal(
     state: &AppState,
     answers: Option<OnboardingAnswers>,
 ) -> Result<OperationResult, AppError> {
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     state.db.set_setting(ONBOARDING_COMPLETED_KEY, "true")?;
     state.db.set_setting(ONBOARDING_COMPLETED_AT_KEY, &now)?;
 

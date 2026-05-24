@@ -216,6 +216,12 @@ pub async fn run_probe() -> Result<SystemProbeReport, ProbeError> {
 /// Build a `LocalizedString` from an i18n key. The key doubles as the
 /// fallback for every locale so the frontend can substitute the translation
 /// without losing information when a key is missing.
+///
+/// NOTE: The returned `LocalizedString` is a *key-envelope*, not a localized
+/// payload. The three locale fields all carry the raw i18n key (e.g.
+/// `"fix.starting"`). The frontend MUST call `i18n.t(localized.zh)` (or
+/// equivalent) before rendering — displaying `.zh`/`.en`/`.ja` directly will
+/// leak the key into the UI. See `apply_fix` / `FixProgress.message`.
 fn localize_key(key: &str) -> LocalizedString {
     LocalizedString {
         zh: key.to_string(),

@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 
@@ -238,154 +239,159 @@ export function ProfileEditor({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-name">
-              {t("profile.editor.nameLabel")}
-              <span className="ml-1 text-destructive">*</span>
-            </Label>
-            <Input
-              id="profile-name"
-              value={form.name}
-              onChange={(e) => update("name", e.target.value)}
-              data-testid="profile-editor-name"
-              placeholder={t("profile.editor.namePlaceholder")}
-            />
-            {errors.name && (
-              <p className="text-xs text-destructive" data-testid="error-name">
-                {errors.name}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-description">
-              {t("profile.editor.descriptionLabel")}
-            </Label>
-            <Textarea
-              id="profile-description"
-              value={form.description}
-              onChange={(e) => update("description", e.target.value)}
-              rows={2}
-              data-testid="profile-editor-description"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+        <ScrollArea className="max-h-[calc(100vh-12rem)] pr-4">
+          <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="profile-icon">
-                {t("profile.editor.iconLabel")}
+              <Label htmlFor="profile-name">
+                {t("profile.editor.nameLabel")}
+                <span className="ml-1 text-destructive">*</span>
               </Label>
               <Input
-                id="profile-icon"
-                value={form.icon}
-                onChange={(e) => update("icon", e.target.value)}
-                data-testid="profile-editor-icon"
-                placeholder="Sparkles"
+                id="profile-name"
+                value={form.name}
+                onChange={(e) => update("name", e.target.value)}
+                data-testid="profile-editor-name"
+                placeholder={t("profile.editor.namePlaceholder")}
+              />
+              {errors.name && (
+                <p
+                  className="text-xs text-destructive"
+                  data-testid="error-name"
+                >
+                  {errors.name}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-description">
+                {t("profile.editor.descriptionLabel")}
+              </Label>
+              <Textarea
+                id="profile-description"
+                value={form.description}
+                onChange={(e) => update("description", e.target.value)}
+                rows={2}
+                data-testid="profile-editor-description"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="profile-icon-color">
-                {t("profile.editor.iconColorLabel")}
-              </Label>
-              <div className="flex items-center gap-2">
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-icon">
+                  {t("profile.editor.iconLabel")}
+                </Label>
                 <Input
-                  id="profile-icon-color"
-                  type="color"
-                  value={form.icon_color}
-                  onChange={(e) => update("icon_color", e.target.value)}
-                  className="h-9 w-14 cursor-pointer p-1"
-                  data-testid="profile-editor-color"
-                />
-                <Input
-                  value={form.icon_color}
-                  onChange={(e) => update("icon_color", e.target.value)}
-                  className="flex-1"
-                  placeholder="#3b82f6"
+                  id="profile-icon"
+                  value={form.icon}
+                  onChange={(e) => update("icon", e.target.value)}
+                  data-testid="profile-editor-icon"
+                  placeholder="Sparkles"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-icon-color">
+                  {t("profile.editor.iconColorLabel")}
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="profile-icon-color"
+                    type="color"
+                    value={form.icon_color}
+                    onChange={(e) => update("icon_color", e.target.value)}
+                    className="h-9 w-14 cursor-pointer p-1"
+                    data-testid="profile-editor-color"
+                  />
+                  <Input
+                    value={form.icon_color}
+                    onChange={(e) => update("icon_color", e.target.value)}
+                    className="flex-1"
+                    placeholder="#3b82f6"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-provider">
+                {t("profile.editor.providerLabel")}
+              </Label>
+              <Select
+                value={form.provider_id || NO_PROVIDER_VALUE}
+                onValueChange={(v) =>
+                  update("provider_id", v === NO_PROVIDER_VALUE ? "" : v)
+                }
+              >
+                <SelectTrigger
+                  id="profile-provider"
+                  data-testid="profile-editor-provider"
+                >
+                  <SelectValue
+                    placeholder={t("profile.editor.providerPlaceholder")}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PROVIDER_VALUE}>
+                    {t("profile.editor.providerEmpty")}
+                  </SelectItem>
+                  {filteredProviders.map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id}>
+                      {opt.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <MultiSelect
+              testId="profile-editor-mcp"
+              label={t("profile.editor.mcpLabel")}
+              emptyMessage={t("profile.editor.mcpEmpty")}
+              options={mcpOptions.map((m) => ({
+                id: m.id,
+                label: m.name,
+                hint:
+                  targetCli && m.enabledForCli.includes(targetCli)
+                    ? t("profile.editor.mcpEnabledHint")
+                    : undefined,
+              }))}
+              value={form.mcp_ids}
+              onToggle={(id) => toggleMember("mcp_ids", id)}
+            />
+
+            <MultiSelect
+              testId="profile-editor-skills"
+              label={t("profile.editor.skillsLabel")}
+              emptyMessage={t("profile.editor.skillsEmpty")}
+              options={skillOptions.map((s) => ({ id: s.id, label: s.name }))}
+              value={form.skill_ids}
+              onToggle={(id) => toggleMember("skill_ids", id)}
+            />
+
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-settings-json">
+                {t("profile.editor.settingsLabel")}
+              </Label>
+              <Textarea
+                id="profile-settings-json"
+                value={form.settings_json}
+                onChange={(e) => update("settings_json", e.target.value)}
+                rows={6}
+                className="font-mono text-xs"
+                data-testid="profile-editor-settings"
+                placeholder='{ "model": "claude-sonnet-4-7" }'
+              />
+              {errors.settings_json && (
+                <p
+                  className="text-xs text-destructive"
+                  data-testid="error-settings"
+                >
+                  {errors.settings_json}
+                </p>
+              )}
             </div>
           </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-provider">
-              {t("profile.editor.providerLabel")}
-            </Label>
-            <Select
-              value={form.provider_id || NO_PROVIDER_VALUE}
-              onValueChange={(v) =>
-                update("provider_id", v === NO_PROVIDER_VALUE ? "" : v)
-              }
-            >
-              <SelectTrigger
-                id="profile-provider"
-                data-testid="profile-editor-provider"
-              >
-                <SelectValue
-                  placeholder={t("profile.editor.providerPlaceholder")}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_PROVIDER_VALUE}>
-                  {t("profile.editor.providerEmpty")}
-                </SelectItem>
-                {filteredProviders.map((opt) => (
-                  <SelectItem key={opt.id} value={opt.id}>
-                    {opt.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <MultiSelect
-            testId="profile-editor-mcp"
-            label={t("profile.editor.mcpLabel")}
-            emptyMessage={t("profile.editor.mcpEmpty")}
-            options={mcpOptions.map((m) => ({
-              id: m.id,
-              label: m.name,
-              hint:
-                targetCli && m.enabledForCli.includes(targetCli)
-                  ? t("profile.editor.mcpEnabledHint")
-                  : undefined,
-            }))}
-            value={form.mcp_ids}
-            onToggle={(id) => toggleMember("mcp_ids", id)}
-          />
-
-          <MultiSelect
-            testId="profile-editor-skills"
-            label={t("profile.editor.skillsLabel")}
-            emptyMessage={t("profile.editor.skillsEmpty")}
-            options={skillOptions.map((s) => ({ id: s.id, label: s.name }))}
-            value={form.skill_ids}
-            onToggle={(id) => toggleMember("skill_ids", id)}
-          />
-
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-settings-json">
-              {t("profile.editor.settingsLabel")}
-            </Label>
-            <Textarea
-              id="profile-settings-json"
-              value={form.settings_json}
-              onChange={(e) => update("settings_json", e.target.value)}
-              rows={6}
-              className="font-mono text-xs"
-              data-testid="profile-editor-settings"
-              placeholder='{ "model": "claude-sonnet-4-7" }'
-            />
-            {errors.settings_json && (
-              <p
-                className="text-xs text-destructive"
-                data-testid="error-settings"
-              >
-                {errors.settings_json}
-              </p>
-            )}
-          </div>
-        </div>
+        </ScrollArea>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>

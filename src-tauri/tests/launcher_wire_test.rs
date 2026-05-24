@@ -337,3 +337,23 @@ fn wire_launch_result_failure_envelope_shape() {
         );
     }
 }
+
+// ============================================================================
+// 5. Regression: `launched_at` must be a Z-form ISO-8601 UTC string with
+//    millisecond precision. The `commands::launcher::start_cli` impl builds
+//    this via `chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)`.
+//    Hardcoded timestamps in the other tests don't exercise that call site, so
+//    this test runs the construction inline and asserts its shape.
+// ============================================================================
+
+#[test]
+fn launched_at_uses_z_form_iso8601_millis() {
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let re = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$").unwrap();
+    assert!(
+        re.is_match(&now),
+        "launched_at must be Z-form ISO-8601 millis, got: {now}"
+    );
+    assert!(now.ends_with('Z'), "must end with Z, got: {now}");
+    assert!(!now.contains('+'), "must not contain offset, got: {now}");
+}

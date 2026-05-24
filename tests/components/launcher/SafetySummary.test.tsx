@@ -46,7 +46,12 @@ const codexData: SafetySummaryData = {
 describe("SafetySummary (Claude)", () => {
   it("renders Claude flags including --strict-mcp-config / --permission-mode default / --add-dir", () => {
     render(
-      <SafetySummary targetCli="claude" data={claudeData} isLoading={false} />,
+      <SafetySummary
+        targetCli="claude"
+        data={claudeData}
+        isLoading={false}
+        hasActiveProfile={true}
+      />,
     );
     // open the collapsible first
     fireEvent.click(screen.getByTestId("launcher-safety-toggle"));
@@ -58,7 +63,12 @@ describe("SafetySummary (Claude)", () => {
 
   it("renders L1 and L2 counts numerically", () => {
     render(
-      <SafetySummary targetCli="claude" data={claudeData} isLoading={false} />,
+      <SafetySummary
+        targetCli="claude"
+        data={claudeData}
+        isLoading={false}
+        hasActiveProfile={true}
+      />,
     );
     fireEvent.click(screen.getByTestId("launcher-safety-toggle"));
     expect(
@@ -71,7 +81,12 @@ describe("SafetySummary (Claude)", () => {
 
   it("defaults to collapsed (content data-state=closed)", () => {
     render(
-      <SafetySummary targetCli="claude" data={claudeData} isLoading={false} />,
+      <SafetySummary
+        targetCli="claude"
+        data={claudeData}
+        isLoading={false}
+        hasActiveProfile={true}
+      />,
     );
     const trigger = screen.getByTestId("launcher-safety-toggle");
     expect(trigger.getAttribute("data-state")).toBe("closed");
@@ -79,7 +94,12 @@ describe("SafetySummary (Claude)", () => {
 
   it("expands when clicked", () => {
     render(
-      <SafetySummary targetCli="claude" data={claudeData} isLoading={false} />,
+      <SafetySummary
+        targetCli="claude"
+        data={claudeData}
+        isLoading={false}
+        hasActiveProfile={true}
+      />,
     );
     const trigger = screen.getByTestId("launcher-safety-toggle");
     fireEvent.click(trigger);
@@ -90,7 +110,12 @@ describe("SafetySummary (Claude)", () => {
 describe("SafetySummary (Codex)", () => {
   it("renders Codex flags including --profile <name>", () => {
     render(
-      <SafetySummary targetCli="codex" data={codexData} isLoading={false} />,
+      <SafetySummary
+        targetCli="codex"
+        data={codexData}
+        isLoading={false}
+        hasActiveProfile={true}
+      />,
     );
     fireEvent.click(screen.getByTestId("launcher-safety-toggle"));
     expect(screen.getByTestId("launcher-safety-flags").textContent).toContain(

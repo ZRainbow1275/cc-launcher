@@ -66,6 +66,11 @@ function actionDescriptionKey(action: FixAction): string {
   }
 }
 
+// TODO(E1-M6): Backend `apply_fix` emits a `LocalizedString` key-envelope
+// where every locale field carries the raw i18n key (e.g. `"fix.starting"`)
+// rather than a translated string. See `src-tauri/src/services/system_probe.rs::localize_key`.
+// This function should call `t(msg[known])` (with a safe fallback) so the
+// rendered phase text is the localized translation instead of the bare key.
 function pickLocalized(msg: LocalizedString, locale: string): string {
   const known: Locale = locale === "en" || locale === "ja" ? locale : "zh";
   return msg[known];

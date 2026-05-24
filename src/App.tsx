@@ -1561,122 +1561,52 @@ function App() {
           style={{ ...DRAG_REGION_STYLE } as any}
         >
           <div
-            className="flex items-center gap-1"
+            className="flex items-center gap-2"
             style={{ WebkitAppRegion: "no-drag" } as any}
           >
-            {currentView !== "providers" ? (
-              <div className="flex items-center gap-2">
-                {/* Back-arrow visibility while onboarding is locked:
-                    - hidden entirely on launcherSystemCheck (the first step)
-                    - hidden on launcherHome (cannot leave the launcher flow)
-                    - on later launcher sub-views, returning to launcherHome
-                      stays inside the launcher sequence so it remains visible.
-                    Once onboarding is complete, the arrow is unrestricted. */}
-                {(() => {
-                  if (onboardingLocked) {
-                    if (
-                      currentView === "launcherSystemCheck" ||
-                      currentView === "launcherHome"
-                    ) {
-                      return null;
-                    }
-                  }
-                  return (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      data-testid="header-back-arrow"
-                      onClick={() => {
-                        if (
-                          isLauncherView(currentView) &&
-                          currentView !== "launcherHome"
-                        ) {
-                          requestSetView("launcherHome");
-                        } else if (currentView === "launcherHome") {
-                          requestSetView("providers");
-                        } else if (currentView === "skillsDiscovery") {
-                          requestSetView("skills");
-                        } else {
-                          requestSetView("providers");
-                        }
-                      }}
-                      className="mr-2 rounded-lg"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                  );
-                })()}
-                <h1 className="text-lg font-semibold">
-                  {currentView === "settings" && t("settings.title")}
-                  {currentView === "prompts" &&
-                    t("prompts.title", {
-                      appName: t(`apps.${sharedFeatureApp}`),
-                    })}
-                  {currentView === "skills" && t("skills.title")}
-                  {currentView === "skillsDiscovery" && t("skills.title")}
-                  {currentView === "mcp" && t("mcp.unifiedPanel.title")}
-                  {currentView === "agents" && t("agents.title")}
-                  {currentView === "universal" &&
-                    t("universalProvider.title", {
-                      defaultValue: "统一供应商",
-                    })}
-                  {currentView === "sessions" && t("sessionManager.title")}
-                  {currentView === "workspace" && t("workspace.title")}
-                  {currentView === "openclawEnv" && t("openclaw.env.title")}
-                  {currentView === "openclawTools" && t("openclaw.tools.title")}
-                  {currentView === "openclawAgents" &&
-                    t("openclaw.agents.title")}
-                  {currentView === "hermesMemory" && t("hermes.memory.title")}
-                  {currentView === "launcherHome" &&
-                    t("shell.nav.home", { defaultValue: "启动器" })}
-                  {currentView === "launcherSystemCheck" &&
-                    t("shell.nav.systemcheck", { defaultValue: "系统自检" })}
-                  {currentView === "launcherSandbox" &&
-                    t("shell.nav.sandbox", { defaultValue: "沙盒" })}
-                  {currentView === "launcherInstall" &&
-                    t("shell.nav.install", { defaultValue: "装机" })}
-                  {currentView === "launcherProfile" &&
-                    t("shell.nav.profile", { defaultValue: "Profile" })}
-                  {currentView === "launcherLaunch" &&
-                    t("shell.nav.launch", { defaultValue: "启动" })}
-                </h1>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="relative inline-flex flex-col items-start leading-tight">
-                  <a
-                    href="https://ccswitch.io"
-                    target="_blank"
-                    rel="noreferrer"
-                    className={cn(
-                      "text-xl font-semibold transition-colors",
-                      isProxyRunning && isCurrentAppTakeoverActive
-                        ? "text-emerald-500 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
-                        : "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300",
-                    )}
-                  >
-                    CC Launcher
-                  </a>
-                  <span className="text-xs text-muted-foreground">
-                    {t("shell.brandTagline", {
-                      defaultValue: "Agent CLI 启动器",
-                    })}
-                  </span>
-                </div>
-                {!onboardingLocked && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    data-testid="header-rocket-entry"
-                    onClick={() => setCurrentView("launcherHome")}
-                    title={t("shell.launcherEntry", {
-                      defaultValue: "启动器",
-                    })}
-                    className="hover:bg-black/5 dark:hover:bg-white/5"
-                  >
-                    <Rocket className="w-4 h-4" />
-                  </Button>
+            {/* E3-H1: brand header renders unconditionally so the product
+                identity anchor stays visible during first-launch onboarding.
+                Previously the entire brand was gated on currentView==="providers"
+                and any launcher* view replaced it with a bare step-title h1. */}
+            <div className="relative inline-flex flex-col items-start leading-tight">
+              <a
+                href="https://ccswitch.io"
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  "text-xl font-semibold transition-colors",
+                  isProxyRunning && isCurrentAppTakeoverActive
+                    ? "text-emerald-500 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
+                    : "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300",
                 )}
+              >
+                CC Launcher
+              </a>
+              <span className="text-xs text-muted-foreground">
+                {t("shell.brandTagline", {
+                  defaultValue: "Agent CLI 启动器",
+                })}
+              </span>
+            </div>
+            {/* Rocket entry stays hidden while onboardingLocked — it is a
+                back-channel into the launcher flow from non-launcher views and
+                must remain disabled during the forced first-run sequence. */}
+            {!onboardingLocked && (
+              <Button
+                variant="ghost"
+                size="icon"
+                data-testid="header-rocket-entry"
+                onClick={() => setCurrentView("launcherHome")}
+                title={t("shell.launcherEntry", {
+                  defaultValue: "启动器",
+                })}
+                className="hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                <Rocket className="w-4 h-4" />
+              </Button>
+            )}
+            {currentView === "providers" && (
+              <>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1711,6 +1641,84 @@ function App() {
                     <BarChart2 className="w-4 h-4" />
                   </Button>
                 )}
+              </>
+            )}
+            {currentView !== "providers" && (
+              <div className="flex items-center gap-2 ml-2 pl-3 border-l border-border/40">
+                {/* Back-arrow visibility while onboarding is locked:
+                    - hidden entirely on launcherSystemCheck (the first step)
+                    - hidden on launcherHome (cannot leave the launcher flow)
+                    - on later launcher sub-views, returning to launcherHome
+                      stays inside the launcher sequence so it remains visible.
+                    Once onboarding is complete, the arrow is unrestricted. */}
+                {(() => {
+                  if (onboardingLocked) {
+                    if (
+                      currentView === "launcherSystemCheck" ||
+                      currentView === "launcherHome"
+                    ) {
+                      return null;
+                    }
+                  }
+                  return (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      data-testid="header-back-arrow"
+                      onClick={() => {
+                        if (
+                          isLauncherView(currentView) &&
+                          currentView !== "launcherHome"
+                        ) {
+                          requestSetView("launcherHome");
+                        } else if (currentView === "launcherHome") {
+                          requestSetView("providers");
+                        } else if (currentView === "skillsDiscovery") {
+                          requestSetView("skills");
+                        } else {
+                          requestSetView("providers");
+                        }
+                      }}
+                      className="rounded-lg"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                  );
+                })()}
+                <h2 className="text-base font-medium text-muted-foreground">
+                  {currentView === "settings" && t("settings.title")}
+                  {currentView === "prompts" &&
+                    t("prompts.title", {
+                      appName: t(`apps.${sharedFeatureApp}`),
+                    })}
+                  {currentView === "skills" && t("skills.title")}
+                  {currentView === "skillsDiscovery" && t("skills.title")}
+                  {currentView === "mcp" && t("mcp.unifiedPanel.title")}
+                  {currentView === "agents" && t("agents.title")}
+                  {currentView === "universal" &&
+                    t("universalProvider.title", {
+                      defaultValue: "统一供应商",
+                    })}
+                  {currentView === "sessions" && t("sessionManager.title")}
+                  {currentView === "workspace" && t("workspace.title")}
+                  {currentView === "openclawEnv" && t("openclaw.env.title")}
+                  {currentView === "openclawTools" && t("openclaw.tools.title")}
+                  {currentView === "openclawAgents" &&
+                    t("openclaw.agents.title")}
+                  {currentView === "hermesMemory" && t("hermes.memory.title")}
+                  {currentView === "launcherHome" &&
+                    t("shell.nav.home", { defaultValue: "启动器" })}
+                  {currentView === "launcherSystemCheck" &&
+                    t("shell.nav.systemcheck", { defaultValue: "系统自检" })}
+                  {currentView === "launcherSandbox" &&
+                    t("shell.nav.sandbox", { defaultValue: "沙盒" })}
+                  {currentView === "launcherInstall" &&
+                    t("shell.nav.install", { defaultValue: "装机" })}
+                  {currentView === "launcherProfile" &&
+                    t("shell.nav.profile", { defaultValue: "Profile" })}
+                  {currentView === "launcherLaunch" &&
+                    t("shell.nav.launch", { defaultValue: "启动" })}
+                </h2>
               </div>
             )}
           </div>

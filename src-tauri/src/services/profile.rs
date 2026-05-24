@@ -614,7 +614,7 @@ pub fn activate_profile(
     // 提前确认 profile 存在
     let profile = get_profile(db, id, target_cli)?;
     let now_ms = Utc::now().timestamp_millis();
-    let now_iso = Utc::now().to_rfc3339();
+    let now_iso = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let backup_dir = profile_backup_dir(now_ms);
     let live_path = live_config_path(target_cli);
 

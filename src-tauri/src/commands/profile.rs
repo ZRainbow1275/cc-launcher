@@ -22,15 +22,23 @@ fn parse_cli(s: &str) -> Result<TargetCli, String> {
     TargetCli::from_str_strict(s).map_err(|e| e.to_string())
 }
 
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ProfileChangedPayload<'a> {
+    cli: &'a str,
+    profile_id: &'a str,
+    kind: &'a str,
+}
+
 /// 最佳努力发射 profile-changed 事件 —— 失败不影响命令成功。
 fn emit_profile_changed(app: &AppHandle, cli: &str, profile_id: &str, kind: &str) {
     let _ = app.emit(
         "profile-changed",
-        serde_json::json!({
-            "cli": cli,
-            "profile_id": profile_id,
-            "kind": kind,
-        }),
+        ProfileChangedPayload {
+            cli,
+            profile_id,
+            kind,
+        },
     );
 }
 

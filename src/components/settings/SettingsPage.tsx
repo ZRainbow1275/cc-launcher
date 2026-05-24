@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { settingsApi } from "@/lib/api";
+import { GeneralSettingsD4Section } from "@/components/settings/GeneralSettingsD4Section";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import { WindowSettings } from "@/components/settings/WindowSettings";
@@ -258,6 +259,7 @@ export function SettingsPage({
           <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2">
               <TabsContent value="general" className="space-y-6 mt-0">
+                <GeneralSettingsD4Section />
                 {settings ? (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}

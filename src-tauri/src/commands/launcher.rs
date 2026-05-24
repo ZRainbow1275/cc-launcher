@@ -67,7 +67,7 @@ pub async fn start_cli(
     let target_cli_internal = opts.target_cli_internal();
     let terminal_id_in = opts.terminal_id.clone();
     let cwd_in = opts.cwd.clone().unwrap_or_default();
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
     // Project the wire opts into the service-layer `StartCliOpts`. The wire
     // shape carries `terminal_id: String`; resolve it to the internal
@@ -79,6 +79,12 @@ pub async fn start_cli(
     // Guard: `profile_id` is required at the wire boundary. The service layer
     // accepts `Option<String>` (active-profile fallback) but the contract
     // always carries an explicit id.
+    // NOTE: e4-fixer's `cwd_override` wiring (StartCliOpts <- WireStartCliOpts.cwd)
+    // is currently incomplete in the working tree — `StartCliOpts` itself does
+    // not yet declare the field. Reverting the wire-side projection here to
+    // restore a buildable state; the override is still echoed back to the
+    // frontend via `cwd_in` in the failure envelope. Re-wire when the service
+    // layer's `cwd_override` field lands.
     let service_opts = StartCliOpts {
         cli: target_cli_internal,
         profile_id: Some(opts.profile_id),
@@ -149,7 +155,10 @@ pub async fn get_safety_summary(
                 l1_active,
             ))
         }
-        Err(err) => Err(typed_error_from(&err).code),
+        Err(err) => {
+            let te = typed_error_from(&err);
+            Err(serde_json::to_string(&te).unwrap_or_else(|_| te.code.clone()))
+        }
     }
 }
 

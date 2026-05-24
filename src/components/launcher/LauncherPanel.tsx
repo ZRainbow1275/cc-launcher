@@ -370,6 +370,7 @@ export function LauncherPanel({
         targetCli={cli}
         data={safetySummary}
         isLoading={safetyQuery.isLoading}
+        hasActiveProfile={!!activeProfileId}
       />
 
       <div className="mt-auto flex flex-col items-stretch gap-2 pt-2">

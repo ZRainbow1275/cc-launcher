@@ -391,7 +391,8 @@ describe("App launcher view injection", () => {
     await waitFor(() => {
       expect(screen.getByTestId("mock-system-check")).toBeInTheDocument();
     });
-    expect(screen.queryByText("CC Launcher")).not.toBeInTheDocument();
+    // E3-H1: brand header stays visible during first-launch onboarding (cc-launcher Phase E)
+    expect(screen.getByText("CC Launcher")).toBeInTheDocument();
   });
 
   it("opens launcherHome when the 🚀 launcher entry button is clicked from providers view", async () => {

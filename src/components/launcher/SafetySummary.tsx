@@ -13,12 +13,14 @@ interface SafetySummaryProps {
   targetCli: TargetCli;
   data: SafetySummaryData | undefined;
   isLoading: boolean;
+  hasActiveProfile: boolean;
 }
 
 export function SafetySummary({
   targetCli,
   data,
   isLoading,
+  hasActiveProfile,
 }: SafetySummaryProps) {
   const { t } = useTranslation();
 
@@ -49,7 +51,14 @@ export function SafetySummary({
         data-testid="launcher-safety-content"
         className="space-y-4 px-4 pb-4"
       >
-        {isLoading || !data ? (
+        {!hasActiveProfile ? (
+          <div
+            data-testid="launcher-safety-no-profile"
+            className="p-4 text-sm text-muted-foreground"
+          >
+            {t("launcher.safety.noActiveProfile")}
+          </div>
+        ) : isLoading || !data ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {t("launcher.safety.loading")}
