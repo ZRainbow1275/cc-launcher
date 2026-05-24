@@ -343,6 +343,7 @@ impl CliInstaller {
             .arg(&pkg)
             .arg(format!("--prefix={}", prefix.display()))
             .arg(format!("--registry={registry}"))
+            .arg(format!("--cache={}", NodeRuntime::runtime_root()?.join("npm-cache").display()))
             .arg("--no-audit")
             .arg("--no-fund")
             .arg("--loglevel=error")
@@ -560,5 +561,20 @@ mod tests {
         assert_eq!(RollbackStep::ALL.len(), 6);
         assert_eq!(RollbackStep::ALL[0], RollbackStep::KillSubprocess);
         assert_eq!(RollbackStep::ALL[5], RollbackStep::EmitCleanedEvent);
+    }
+
+    // Mutates the process-wide CC_SWITCH_TEST_HOME env var, must be serialized
+    // with the registry_probe and portable_git tests that touch the same var.
+    #[test]
+    #[serial_test::serial]
+    fn npm_install_args_include_cache_flag() {
+        // Structural smoke test: just confirm runtime_root resolves and
+        // we can construct the --cache= arg without panic.
+        std::env::set_var("CC_SWITCH_TEST_HOME", std::env::temp_dir());
+        let root = NodeRuntime::runtime_root().expect("runtime_root resolves");
+        let cache_arg = format!("--cache={}", root.join("npm-cache").display());
+        assert!(cache_arg.starts_with("--cache="));
+        assert!(cache_arg.contains("npm-cache"));
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
     }
 }

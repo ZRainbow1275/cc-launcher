@@ -7,9 +7,10 @@
 //! Matches frontend `RegistryProbe` / `RegistryPickResult` contract in
 //! `src/lib/api/contracts.ts`.
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use chrono::{SecondsFormat, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use futures::future::join_all;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,12 @@ pub const CANARY_PKG: &str = "@openai/codex";
 /// Probe network budget — both connect and total are short, per research.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const TOTAL_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Cache freshness window — within 24h the probe is short-circuited.
+const CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// On-disk cache filename inside `<runtime_root>/`.
+const CACHE_FILENAME: &str = "registry_probe_cache.json";
 
 /// 4-registry whitelist. Order is irrelevant since we sort by latency at the end.
 ///
@@ -103,11 +110,34 @@ impl RegistryProbeService {
         canary: &str,
         force_refresh: bool,
     ) -> Result<RegistryPickResult, RegistryProbeError> {
-        // Cache support is intentionally NOT yet wired — the design lives in
-        // research §"缓存策略" but isn't part of the Phase B B2 contract.
-        // Reserved for a follow-up Phase C polish.
-        let _ = force_refresh;
+        Self::smart_pick_inner(canary, force_refresh, REGISTRY_DEFS).await
+    }
 
+    /// Internal entry point: accepts an injectable mirror list for test isolation.
+    ///
+    /// Implements the cache + fallback flow:
+    /// 1. Fresh cache hit (age < 24h, force_refresh=false) → return cached (no network).
+    /// 2. Run probes.
+    /// 3. Probe success → persist to cache atomically, return `cached: false`.
+    /// 4. All probes fail BUT a (stale) cache exists → return cached (degraded mode).
+    /// 5. All probes fail AND no cache → `AllUnreachable`.
+    pub async fn smart_pick_inner(
+        canary: &str,
+        force_refresh: bool,
+        defs: &[RegistryDef],
+    ) -> Result<RegistryPickResult, RegistryProbeError> {
+        let cache_path = cache_file_path();
+
+        // Step 1: fresh cache short-circuit.
+        if !force_refresh {
+            if let Some(path) = cache_path.as_ref() {
+                if let Some(cached) = load_fresh_cache(path) {
+                    return Ok(cached);
+                }
+            }
+        }
+
+        // Step 2: probe network.
         let client = Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .timeout(TOTAL_TIMEOUT)
@@ -117,7 +147,7 @@ impl RegistryProbeService {
             .build()
             .map_err(|e| RegistryProbeError::ClientBuild(e.to_string()))?;
 
-        let probes = REGISTRY_DEFS.iter().map(|def| {
+        let probes = defs.iter().map(|def| {
             let client = client.clone();
             let url = format!(
                 "{}/{}",
@@ -138,20 +168,112 @@ impl RegistryProbeService {
             (false, false) => a.latency_ms.cmp(&b.latency_ms),
         });
 
-        let winner = candidates
-            .iter()
-            .find(|c| c.ok)
-            .cloned()
-            .ok_or(RegistryProbeError::AllUnreachable)?;
-
-        Ok(RegistryPickResult {
-            candidates,
-            chosen: winner.url,
-            chosen_name: winner.name,
-            chosen_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
-            cached: false,
-        })
+        match candidates.iter().find(|c| c.ok).cloned() {
+            Some(winner) => {
+                let result = RegistryPickResult {
+                    candidates,
+                    chosen: winner.url,
+                    chosen_name: winner.name,
+                    chosen_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
+                    cached: false,
+                };
+                // Best-effort cache write: log on error but never fail the probe.
+                if let Some(path) = cache_path.as_ref() {
+                    if let Err(e) = write_cache_atomic(path, &result) {
+                        log::warn!("registry_probe: cache write failed: {}", e);
+                    }
+                }
+                Ok(result)
+            }
+            None => {
+                // Step 4: all probes failed — try stale cache (any age).
+                if let Some(path) = cache_path.as_ref() {
+                    if let Some(mut stale) = read_cache_raw(path) {
+                        log::warn!(
+                            "registry_probe: all candidates unreachable, returning stale cache from {}",
+                            stale.chosen_at
+                        );
+                        stale.cached = true;
+                        return Ok(stale);
+                    }
+                }
+                Err(RegistryProbeError::AllUnreachable)
+            }
+        }
     }
+}
+
+/// Resolve the on-disk cache path. Mirrors `NodeRuntime::runtime_root()` resolution
+/// (honors `CC_SWITCH_TEST_HOME`, falls back to `dirs::data_local_dir()`).
+///
+/// Returns `None` if no data dir is available (extremely rare — only on broken
+/// platforms). Caller silently degrades to "no cache" rather than crash.
+fn cache_file_path() -> Option<PathBuf> {
+    if let Ok(override_dir) = std::env::var("CC_SWITCH_TEST_HOME") {
+        let trimmed = override_dir.trim();
+        if !trimmed.is_empty() {
+            return Some(
+                PathBuf::from(trimmed)
+                    .join("cc-switch")
+                    .join("runtime")
+                    .join(CACHE_FILENAME),
+            );
+        }
+    }
+    dirs::data_local_dir()
+        .map(|base| base.join("cc-switch").join("runtime").join(CACHE_FILENAME))
+}
+
+/// Read the cache file, return parsed result if and only if it's fresh (< CACHE_TTL).
+/// Malformed cache → silently delete + return None (fall through to probe).
+fn load_fresh_cache(path: &PathBuf) -> Option<RegistryPickResult> {
+    let result = read_cache_raw(path)?;
+    let parsed_at = match DateTime::parse_from_rfc3339(&result.chosen_at) {
+        Ok(t) => t.with_timezone(&Utc),
+        Err(_) => return None,
+    };
+    let age = Utc::now().signed_duration_since(parsed_at);
+    let age_std = age.to_std().ok()?;
+    if age_std < CACHE_TTL {
+        let mut hit = result;
+        hit.cached = true;
+        Some(hit)
+    } else {
+        None
+    }
+}
+
+/// Read + parse the cache file with no freshness check. Returns None when:
+/// - file doesn't exist
+/// - file unreadable
+/// - JSON malformed (also deletes the file so the next call probes cleanly)
+fn read_cache_raw(path: &PathBuf) -> Option<RegistryPickResult> {
+    let contents = std::fs::read_to_string(path).ok()?;
+    match serde_json::from_str::<RegistryPickResult>(&contents) {
+        Ok(r) => Some(r),
+        Err(e) => {
+            log::warn!(
+                "registry_probe: malformed cache at {}, deleting: {}",
+                path.display(),
+                e
+            );
+            let _ = std::fs::remove_file(path);
+            None
+        }
+    }
+}
+
+/// Atomic cache write: write to `<path>.tmp`, then rename.
+/// Creates parent directory if missing. Windows-safe via `std::fs::rename`.
+fn write_cache_atomic(path: &PathBuf, result: &RegistryPickResult) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let json = serde_json::to_string_pretty(result).map_err(std::io::Error::other)?;
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
 }
 
 async fn probe_one(client: &Client, def: &RegistryDef, url: &str) -> RegistryProbe {
@@ -252,6 +374,275 @@ mod tests {
         assert!(results[1].ok);
         // Fast should come first
         assert_eq!(results[0].name, "fast");
+    }
+
+    // ---------- cache + fallback tests (G2) ----------
+    //
+    // All cache tests share the process-wide CC_SWITCH_TEST_HOME env var,
+    // so they MUST run serially. Each test sets a unique tempdir.
+
+    use serial_test::serial;
+    use std::time::SystemTime;
+
+    /// Helper: build a RegistryPickResult with a chosenAt N hours in the past.
+    fn make_cached(name: &str, url: &str, hours_ago: i64) -> RegistryPickResult {
+        let ts = Utc::now() - chrono::Duration::hours(hours_ago);
+        RegistryPickResult {
+            candidates: vec![RegistryProbe {
+                name: name.to_string(),
+                url: url.to_string(),
+                ok: true,
+                latency_ms: 42,
+                status_code: Some(200),
+                error: None,
+            }],
+            chosen: url.to_string(),
+            chosen_name: name.to_string(),
+            chosen_at: ts.to_rfc3339_opts(SecondsFormat::Millis, true),
+            cached: false,
+        }
+    }
+
+    /// Helper: write cache file to `<temp>/cc-switch/runtime/registry_probe_cache.json`.
+    fn write_cache_to(temp: &std::path::Path, value: &RegistryPickResult) {
+        let dir = temp.join("cc-switch").join("runtime");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(CACHE_FILENAME);
+        std::fs::write(&path, serde_json::to_string_pretty(value).unwrap()).unwrap();
+    }
+
+    /// Helper: build a "guaranteed-fail" RegistryDef pointing at refused port.
+    fn refused_def(name: &'static str) -> RegistryDef {
+        RegistryDef {
+            name,
+            // 127.0.0.1:1 is reliably refused on all platforms.
+            url: "http://127.0.0.1:1",
+        }
+    }
+
+    /// 1. Fresh cache (1h old) short-circuits the probe — no network call.
+    #[tokio::test]
+    #[serial]
+    async fn cache_fresh_skips_probe() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        let cached = make_cached("npmmirror", "https://registry.npmmirror.com", 1);
+        write_cache_to(temp.path(), &cached);
+
+        // Use a refused-port def: if the cache short-circuit fails, we'd see
+        // ok=false and the all-fail branch. The cache hit MUST short-circuit.
+        let defs = [refused_def("doomed")];
+        let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
+            .await
+            .unwrap();
+
+        assert!(result.cached, "fresh cache must return cached: true");
+        assert_eq!(result.chosen_name, "npmmirror");
+        assert_eq!(result.chosen, "https://registry.npmmirror.com");
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
+    /// 2. Expired cache (25h old) does NOT short-circuit — probe runs.
+    #[tokio::test]
+    #[serial]
+    async fn cache_expired_triggers_probe() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        let stale = make_cached("npmmirror", "https://registry.npmmirror.com", 25);
+        write_cache_to(temp.path(), &stale);
+
+        // Live mock server to confirm probe ran.
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/@openai/codex");
+                then.status(200).body("{}");
+            })
+            .await;
+        let defs = [RegistryDef {
+            name: "live",
+            url: Box::leak(server.url("").into_boxed_str()),
+        }];
+
+        let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
+            .await
+            .unwrap();
+
+        assert!(!result.cached, "expired cache must NOT return cached: true");
+        assert_eq!(result.chosen_name, "live");
+        mock.assert_async().await;
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
+    /// 3. force_refresh=true bypasses even a fresh cache.
+    #[tokio::test]
+    #[serial]
+    async fn force_refresh_bypasses_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        // Pre-write fresh (1h) cache.
+        let cached = make_cached("npmmirror", "https://registry.npmmirror.com", 1);
+        write_cache_to(temp.path(), &cached);
+
+        // Confirm probe runs by requiring a live mock hit.
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/@openai/codex");
+                then.status(200).body("{}");
+            })
+            .await;
+        let defs = [RegistryDef {
+            name: "live",
+            url: Box::leak(server.url("").into_boxed_str()),
+        }];
+
+        let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, true, &defs)
+            .await
+            .unwrap();
+
+        assert!(!result.cached);
+        assert_eq!(result.chosen_name, "live");
+        mock.assert_async().await;
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
+    /// 4. All probes fail + a stale (48h) cache exists → return stale, cached=true.
+    #[tokio::test]
+    #[serial]
+    async fn all_unreachable_with_stale_cache_returns_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        let stale = make_cached("npmmirror", "https://registry.npmmirror.com", 48);
+        write_cache_to(temp.path(), &stale);
+
+        let defs = [refused_def("doomed1"), refused_def("doomed2")];
+        let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
+            .await
+            .unwrap();
+
+        assert!(
+            result.cached,
+            "stale-cache fallback must set cached: true"
+        );
+        assert_eq!(result.chosen_name, "npmmirror");
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
+    /// 5. All probes fail + no cache file → AllUnreachable error.
+    #[tokio::test]
+    #[serial]
+    async fn all_unreachable_no_cache_returns_error() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        let defs = [refused_def("doomed1"), refused_def("doomed2")];
+        let err = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, RegistryProbeError::AllUnreachable));
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
+    /// 6. Malformed cache JSON is tolerated — deleted + fall through to probe.
+    #[tokio::test]
+    #[serial]
+    async fn malformed_cache_falls_through_to_probe() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        // Write garbage to cache file.
+        let dir = temp.path().join("cc-switch").join("runtime");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(CACHE_FILENAME);
+        std::fs::write(&path, "this is not json {{{").unwrap();
+
+        // Probe should succeed via mock — no crash.
+        let server = MockServer::start_async().await;
+        let _ = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/@openai/codex");
+                then.status(200).body("{}");
+            })
+            .await;
+        let defs = [RegistryDef {
+            name: "live",
+            url: Box::leak(server.url("").into_boxed_str()),
+        }];
+
+        let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
+            .await
+            .unwrap();
+        assert!(!result.cached);
+        assert_eq!(result.chosen_name, "live");
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
+    /// 7. Successful probe writes cache atomically:
+    /// `registry_probe_cache.json` exists, `.tmp` does NOT remain.
+    #[tokio::test]
+    #[serial]
+    async fn cache_atomic_write() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        let server = MockServer::start_async().await;
+        let _ = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/@openai/codex");
+                then.status(200).body("{}");
+            })
+            .await;
+        let defs = [RegistryDef {
+            name: "live",
+            url: Box::leak(server.url("").into_boxed_str()),
+        }];
+
+        // Subtract 2s to absorb filesystem mtime resolution (NTFS ~100ns, FAT 2s,
+        // and clock jitter on slow runners). Without this absorbtion the assertion
+        // is racy on Windows where mtime can land just before `before`.
+        let before = SystemTime::now() - Duration::from_secs(2);
+        let _ = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
+            .await
+            .unwrap();
+
+        let dir = temp.path().join("cc-switch").join("runtime");
+        let final_path = dir.join(CACHE_FILENAME);
+        let tmp_path = dir.join("registry_probe_cache.json.tmp");
+
+        assert!(
+            final_path.exists(),
+            "{} must exist after a successful probe",
+            final_path.display()
+        );
+        assert!(
+            !tmp_path.exists(),
+            "{} must NOT remain after atomic rename",
+            tmp_path.display()
+        );
+
+        // Sanity: file was actually written (mtime ≥ test start - 2s buffer).
+        let meta = std::fs::metadata(&final_path).unwrap();
+        assert!(meta.modified().unwrap() >= before);
+
+        // Sanity: round-trip parse succeeds and chosen matches.
+        let contents = std::fs::read_to_string(&final_path).unwrap();
+        let parsed: RegistryPickResult = serde_json::from_str(&contents).unwrap();
+        assert_eq!(parsed.chosen_name, "live");
+        assert!(!parsed.cached, "persisted result records cached=false");
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
     }
 
     /// 1 failing registry is marked ok=false with an error message.

@@ -27,6 +27,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
+use super::mirrors::{detect_arch, NodeDistMirror, NODE_DIST_MIRRORS};
 use super::registry_probe::{RegistryProbeError, RegistryProbeService};
 
 /// Frontend-facing `NodeStatus` (camelCase JSON).
@@ -352,14 +353,14 @@ impl NodeRuntime {
     where
         F: FnMut(InstallProgress) + Send,
     {
-        // 1. Resolve latest Node 20 LTS version
-        let version = resolve_latest_v20().await?;
+        // 1. Resolve latest Node 20 LTS version (tries each mirror; logs winner).
+        let version = resolve_latest_v20(on_progress).await?;
 
-        // 2. Determine archive URL + platform suffix
-        let (archive_url, archive_name) = node_archive_url(&version)?;
-        let shasum_url = format!("https://nodejs.org/dist/{version}/SHASUMS256.txt");
+        // 2. Compute archive name once (arch-aware via detect_arch()).
+        let archive_name = node_archive_name(&version)?;
 
-        // 3. Download archive
+        // 3. Stream archive + SHASUMS from the SAME mirror. If a mirror fails on
+        //    either request, advance to the next mirror and clean any partial file.
         let tmp_dir = tempfile::Builder::new()
             .prefix("cc-switch-node-")
             .tempdir()
@@ -368,10 +369,84 @@ impl NodeRuntime {
                 source: e,
             })?;
         let archive_path = tmp_dir.path().join(&archive_name);
-        download_to(&archive_url, &archive_path).await?;
 
-        // 4. Fetch SHASUMS and verify
-        let shasums = fetch_text(&shasum_url).await?;
+        let mut last_err: Option<NodeRuntimeError> = None;
+        let mut chosen_mirror: Option<&'static str> = None;
+        let mut shasums_text: Option<String> = None;
+
+        for (idx, mirror) in NODE_DIST_MIRRORS.iter().enumerate() {
+            // Clean any leftover from previous mirror attempt.
+            if archive_path.exists() {
+                if let Err(e) = std::fs::remove_file(&archive_path) {
+                    log::warn!(
+                        "could not clean partial archive {}: {}",
+                        archive_path.display(),
+                        e
+                    );
+                }
+            }
+
+            if idx > 0 {
+                on_progress(progress(
+                    InstallPhase::InstallingNode,
+                    l(
+                        &format!("尝试备用镜像: {}", mirror.name),
+                        &format!("Trying alternate mirror: {}", mirror.name),
+                        &format!("代替ミラーを試行中: {}", mirror.name),
+                    ),
+                    Some(25),
+                    Some(mirror.name.to_string()),
+                    None,
+                ));
+            }
+
+            let archive_url = mirror.archive_url(&version, &archive_name);
+            let shasum_url = mirror.shasums_url(&version);
+
+            match download_to(&archive_url, &archive_path).await {
+                Ok(()) => {}
+                Err(e) => {
+                    log::warn!(
+                        "archive download from mirror {} failed: {}",
+                        mirror.name,
+                        e
+                    );
+                    last_err = Some(e);
+                    continue;
+                }
+            }
+
+            // SHASUMS MUST come from the same mirror — different mirrors may
+            // serve different builds during a release rollout.
+            match fetch_text(&shasum_url).await {
+                Ok(s) => {
+                    shasums_text = Some(s);
+                    chosen_mirror = Some(mirror.name);
+                    log::info!("Node archive + SHASUMS from mirror: {}", mirror.name);
+                    break;
+                }
+                Err(e) => {
+                    log::warn!(
+                        "SHASUMS download from mirror {} failed: {}",
+                        mirror.name,
+                        e
+                    );
+                    last_err = Some(e);
+                    continue;
+                }
+            }
+        }
+
+        let shasums = shasums_text.ok_or_else(|| {
+            last_err.unwrap_or_else(|| {
+                NodeRuntimeError::Http(
+                    "all Node distribution mirrors failed (no underlying error)".into(),
+                )
+            })
+        })?;
+        let mirror_name = chosen_mirror.unwrap_or("unknown");
+
+        // 4. Parse SHASUMS for our archive name and verify.
         let expected_sha = shasums
             .lines()
             .find_map(|line| {
@@ -386,7 +461,7 @@ impl NodeRuntime {
             })
             .ok_or_else(|| {
                 NodeRuntimeError::Validate(format!(
-                    "SHASUMS256.txt for {version} has no entry for {archive_name}"
+                    "SHASUMS256.txt (mirror={mirror_name}) for {version} has no entry for {archive_name}"
                 ))
             })?;
 
@@ -398,7 +473,7 @@ impl NodeRuntime {
                 "ダウンロードを検証中...",
             ),
             Some(60),
-            None,
+            Some(mirror_name.to_string()),
             None,
         ));
 
@@ -420,7 +495,7 @@ impl NodeRuntime {
                 "Node.js を展開中...",
             ),
             Some(75),
-            None,
+            Some(mirror_name.to_string()),
             None,
         ));
         let stage_dir = tmp_dir.path().join("stage");
@@ -496,10 +571,55 @@ struct DistIndexEntry {
     lts: serde_json::Value,
 }
 
-async fn resolve_latest_v20() -> Result<String, NodeRuntimeError> {
-    let url = "https://nodejs.org/dist/index.json";
-    let body = fetch_text(url).await?;
-    let entries: Vec<DistIndexEntry> = serde_json::from_str(&body)
+/// Resolve the latest Node 20 LTS version. Tries each mirror in order; the
+/// first one to return a parseable `index.json` wins. Emits a progress event
+/// when falling back to an alternate mirror so the UI tells the user why
+/// the install is "taking longer than usual".
+async fn resolve_latest_v20<F>(on_progress: &mut F) -> Result<String, NodeRuntimeError>
+where
+    F: FnMut(InstallProgress) + Send,
+{
+    let mut last_err: Option<NodeRuntimeError> = None;
+
+    for (idx, mirror) in NODE_DIST_MIRRORS.iter().enumerate() {
+        if idx > 0 {
+            on_progress(progress(
+                InstallPhase::ProbingRegistry,
+                l(
+                    &format!("尝试备用镜像: {}", mirror.name),
+                    &format!("Trying alternate mirror: {}", mirror.name),
+                    &format!("代替ミラーを試行中: {}", mirror.name),
+                ),
+                Some(10),
+                Some(mirror.name.to_string()),
+                None,
+            ));
+        }
+
+        let url = mirror.dist_index_url();
+        match fetch_text(&url).await {
+            Ok(body) => match parse_latest_v20_from_index(&body) {
+                Ok(v) => {
+                    log::info!("Node version resolved from mirror {}: {}", mirror.name, v);
+                    return Ok(v);
+                }
+                Err(e) => {
+                    log::warn!("parse index.json from {} failed: {}", mirror.name, e);
+                    last_err = Some(e);
+                }
+            },
+            Err(e) => {
+                log::warn!("fetch index.json from {} failed: {}", mirror.name, e);
+                last_err = Some(e);
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or(NodeRuntimeError::NoRelease))
+}
+
+fn parse_latest_v20_from_index(body: &str) -> Result<String, NodeRuntimeError> {
+    let entries: Vec<DistIndexEntry> = serde_json::from_str(body)
         .map_err(|e| NodeRuntimeError::Http(format!("parse dist/index.json failed: {e}")))?;
     let v20 = entries
         .into_iter()
@@ -511,30 +631,36 @@ async fn resolve_latest_v20() -> Result<String, NodeRuntimeError> {
     Ok(v20.version)
 }
 
-fn node_archive_url(version: &str) -> Result<(String, String), NodeRuntimeError> {
+/// Compose the archive filename for the current platform + version.
+/// Arch is determined at *runtime* via `detect_arch()` (Rosetta-aware on macOS).
+fn node_archive_name(version: &str) -> Result<String, NodeRuntimeError> {
+    let arch = detect_arch();
     #[cfg(target_os = "windows")]
-    let suffix = if cfg!(target_arch = "aarch64") {
-        "win-arm64.zip"
-    } else {
-        "win-x64.zip"
-    };
+    let suffix = format!("win-{arch}.zip");
     #[cfg(target_os = "macos")]
-    let suffix = if cfg!(target_arch = "aarch64") {
-        "darwin-arm64.tar.xz"
-    } else {
-        "darwin-x64.tar.xz"
-    };
+    let suffix = format!("darwin-{arch}.tar.xz");
     #[cfg(target_os = "linux")]
-    let suffix = if cfg!(target_arch = "aarch64") {
-        "linux-arm64.tar.xz"
-    } else {
-        "linux-x64.tar.xz"
-    };
+    let suffix = format!("linux-{arch}.tar.xz");
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let suffix: &str = return Err(NodeRuntimeError::NoRelease);
+    {
+        let _ = arch;
+        return Err(NodeRuntimeError::NoRelease);
+    }
 
-    let name = format!("node-{version}-{suffix}");
-    let url = format!("https://nodejs.org/dist/{version}/{name}");
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    Ok(format!("node-{version}-{suffix}"))
+}
+
+/// Build (archive_url, archive_name) using the FIRST mirror in the chain.
+/// Kept for tests and rare callers; runtime install flow iterates the chain
+/// explicitly inside `run_install_pipeline`.
+#[allow(dead_code)]
+fn node_archive_url(version: &str) -> Result<(String, String), NodeRuntimeError> {
+    let name = node_archive_name(version)?;
+    let mirror: &NodeDistMirror = NODE_DIST_MIRRORS
+        .first()
+        .expect("NODE_DIST_MIRRORS must not be empty");
+    let url = mirror.archive_url(version, &name);
     Ok((url, name))
 }
 
@@ -713,9 +839,49 @@ mod tests {
         let (url, name) = node_archive_url("v20.11.0").unwrap();
         assert!(url.contains("v20.11.0"));
         assert!(url.ends_with(&name));
+
+        let arch = detect_arch();
+        let expected_arch_token = format!("-{arch}");
+        assert!(
+            name.contains(&expected_arch_token),
+            "archive name {name} did not include arch suffix {expected_arch_token}"
+        );
+
+        // First mirror in chain owns the URL when no chain-iteration is in play.
+        let first_mirror = &NODE_DIST_MIRRORS[0];
+        assert!(
+            url.starts_with(first_mirror.base),
+            "URL {url} did not start with first mirror base {}",
+            first_mirror.base
+        );
+
         #[cfg(target_os = "windows")]
         assert!(name.contains("win-"));
         #[cfg(target_os = "macos")]
         assert!(name.contains("darwin-"));
+        #[cfg(target_os = "linux")]
+        assert!(name.contains("linux-"));
+    }
+
+    #[test]
+    fn parse_latest_v20_from_index_picks_first_lts() {
+        let body = r#"[
+            {"version":"v21.5.0","lts":false},
+            {"version":"v20.11.0","lts":"Iron"},
+            {"version":"v20.10.0","lts":"Iron"},
+            {"version":"v18.19.0","lts":"Hydrogen"}
+        ]"#;
+        let v = parse_latest_v20_from_index(body).unwrap();
+        assert_eq!(v, "v20.11.0");
+    }
+
+    #[test]
+    fn parse_latest_v20_rejects_when_no_v20_lts() {
+        let body = r#"[
+            {"version":"v21.5.0","lts":false},
+            {"version":"v20.11.0","lts":false}
+        ]"#;
+        let err = parse_latest_v20_from_index(body).unwrap_err();
+        assert!(matches!(err, NodeRuntimeError::NoRelease));
     }
 }

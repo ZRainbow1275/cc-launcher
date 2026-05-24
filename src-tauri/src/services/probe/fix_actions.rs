@@ -81,21 +81,52 @@ async fn install_node(lts_major: u8) -> Result<(), FixError> {
 
 // ---------------------------- InstallGit -------------------------------
 
-/// Open the official Git download page in the user's default browser.
+/// Install Git automatically on the current platform.
 ///
-/// On Windows the Git for Windows installer lives at git-scm.com/download/win.
-/// On macOS we suggest `xcode-select --install` via the support page. We do
-/// NOT attempt silent install in MVP — it requires admin / Gatekeeper
-/// approval which violates the "read-only probe + auditable fix" invariant.
+/// - **Windows**: download PortableGit via the China-first mirror chain and
+///   self-extract into the private runtime tree. No admin / UAC required.
+/// - **macOS**: spawn `xcode-select --install` which pops the system dialog
+///   for Command Line Tools. If that command fails (already installed,
+///   user dismissed, etc.) we fall back to opening Apple's CLT page so the
+///   user still has a path forward.
+/// - **Linux**: open `git-scm.com/download/linux` — every distro has its own
+///   package manager; we don't try to second-guess.
 async fn install_git() -> Result<(), FixError> {
-    let url = if cfg!(target_os = "windows") {
-        "https://git-scm.com/download/win"
-    } else if cfg!(target_os = "macos") {
-        "https://git-scm.com/download/mac"
-    } else {
-        "https://git-scm.com/download/linux"
-    };
-    open_url(url)
+    #[cfg(target_os = "windows")]
+    {
+        use crate::services::installer::portable_git::PortableGit;
+        // cfg-gated early return — other branches (macos / linux) follow below.
+        #[allow(clippy::needless_return)]
+        return PortableGit::install()
+            .await
+            .map_err(|e| FixError::Other(format!("PortableGit install failed: {e}")));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // `xcode-select --install` triggers Apple's GUI dialog and exits
+        // immediately. A non-zero exit means CLT is already installed or
+        // the request couldn't be dispatched — in either case we fall
+        // back to the official Apple download page so the user still has
+        // a path forward.
+        let result = tokio::process::Command::new("xcode-select")
+            .arg("--install")
+            .output()
+            .await;
+        match result {
+            Ok(out) if out.status.success() => return Ok(()),
+            Ok(_) | Err(_) => {
+                return open_url(
+                    "https://developer.apple.com/download/all/?q=command%20line%20tools",
+                );
+            }
+        }
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        open_url("https://git-scm.com/download/linux")
+    }
 }
 
 // ---------------------------- CleanEnvVar ------------------------------
@@ -285,5 +316,34 @@ mod tests {
     async fn inject_path_empty_is_noop() {
         let res = inject_path_entries(&[]).await;
         assert!(res.is_ok());
+    }
+
+    /// Sanity check: `install_git` is exposed via `apply(&FixAction::InstallGit)`
+    /// and returns `Ok` or a typed `FixError` (never panics). On Windows the
+    /// PortableGit install may fail without network/sandbox; on macOS the
+    /// xcode-select branch is best-effort; on Linux we fall back to opening
+    /// the docs URL. Either way the type contract holds.
+    #[tokio::test]
+    async fn install_git_returns_typed_error_on_invalid_state() {
+        let res = apply(&FixAction::InstallGit).await;
+        match res {
+            Ok(()) => {}
+            Err(e) => {
+                // Code must be one of the stable enum codes.
+                let code = e.code();
+                assert!(
+                    [
+                        "FIX_PENDING_B2",
+                        "FIX_OPENER_FAILED",
+                        "FIX_ENV_VAR_FAILED",
+                        "FIX_PATH_INJECT_FAILED",
+                        "FIX_IO_ERROR",
+                        "FIX_OTHER",
+                    ]
+                    .contains(&code),
+                    "unexpected error code: {code}"
+                );
+            }
+        }
     }
 }

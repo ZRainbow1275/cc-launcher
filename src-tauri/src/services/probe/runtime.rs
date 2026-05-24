@@ -152,6 +152,34 @@ fn probe_git() -> ProbeItem {
         group: ProbeGroup::Runtime,
     };
 
+    // On Windows, check the private PortableGit runtime FIRST. A novice
+    // user might have a broken system-wide Git on PATH (e.g. WSL stub
+    // pointing at a non-existent binary) while our private install is
+    // perfectly fine.
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(private_git) =
+            crate::services::installer::portable_git::PortableGit::git_binary()
+        {
+            if private_git.exists() {
+                if let Some(raw) = run_version(&private_git) {
+                    let version = raw
+                        .strip_prefix("git version ")
+                        .unwrap_or(&raw)
+                        .trim()
+                        .to_string();
+                    item.value =
+                        json!({ "version": version, "path": private_git.display().to_string() });
+                    item.status = ProbeStatus::Green;
+                    item.message_key = "probe.git.green".into();
+                    item.fix_action = None;
+                    item.elapsed_ms = t0.elapsed().as_millis() as u64;
+                    return item;
+                }
+            }
+        }
+    }
+
     if let Some(path) = locate("git") {
         if let Some(raw) = run_version(&path) {
             // "git version 2.43.0" -> "2.43.0"
