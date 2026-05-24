@@ -58,21 +58,22 @@ describe("L1RuleEditor", () => {
     expect(screen.getByTestId("l1-rule-L1.rm_arbitrary-unlock")).toBeTruthy();
   });
 
-  it("invokes onToggle when the switch is clicked", () => {
+  it("routes a switch click on a locked-on rule through onRequestUnlock (A1 fix)", () => {
     const onToggle = vi.fn();
+    const onRequestUnlock = vi.fn();
     render(
       <L1RuleEditor
         rule={baseRule()}
         onToggle={onToggle}
-        onRequestUnlock={vi.fn()}
+        onRequestUnlock={onRequestUnlock}
         onRelock={vi.fn()}
       />,
     );
 
     const sw = screen.getByTestId("l1-rule-L1.rm_arbitrary-switch");
     fireEvent.click(sw);
-    expect(onToggle).toHaveBeenCalledTimes(1);
-    expect(onToggle.mock.calls[0]?.[1]).toBe(false);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(onRequestUnlock).toHaveBeenCalledTimes(1);
   });
 
   it("invokes onRequestUnlock when the unlock button is clicked", () => {

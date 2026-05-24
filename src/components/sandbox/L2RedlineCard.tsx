@@ -39,7 +39,7 @@ export function L2RedlineCard({ redline, os, className }: L2RedlineCardProps) {
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="destructive"
-              className="text-[10px] uppercase tracking-wide"
+              className="border-transparent bg-red-700 text-[10px] uppercase tracking-wide text-white hover:bg-red-700/90"
             >
               {t("sandbox.l2.permanentLockBadge")}
             </Badge>

@@ -728,7 +728,167 @@
       "defaultCostMultiplierRequired": "デフォルト倍率は必須です",
       "defaultCostMultiplierInvalid": "デフォルト倍率の形式が正しくありません"
     },
-    "saveFailedGeneric": "保存に失敗しました。もう一度お試しください"
+    "saveFailedGeneric": "保存に失敗しました。もう一度お試しください",
+    "uiMode": {
+      "label": "UIモード",
+      "hint": "初心者モードは主要操作のみを表示します；エキスパートモードはすべての高度なパネルを解放します",
+      "novice": "初心者モード",
+      "expert": "エキスパートモード",
+      "switchFailed": "切り替えに失敗しました"
+    },
+    "locale": {
+      "label": "表示言語",
+      "hint": "切り替え後すぐに反映され、バックエンド構成に永続化されます",
+      "switchFailed": "切り替えに失敗しました"
+    }
+  },
+  "probe": {
+    "os": {
+      "name": "オペレーティングシステム",
+      "green": "OS は正常です",
+      "yellow": "OS に警告があります",
+      "red": "OS が非対応です",
+      "missing": "OS 情報が検出されませんでした",
+      "unknown": "OS の状態が不明です"
+    },
+    "arch": {
+      "name": "アーキテクチャ",
+      "green": "アーキテクチャは互換です",
+      "yellow": "アーキテクチャに警告があります",
+      "red": "アーキテクチャは未対応です",
+      "missing": "アーキテクチャが検出されませんでした",
+      "unknown": "アーキテクチャの状態が不明です"
+    },
+    "cpu": {
+      "name": "CPU",
+      "green": "CPU は要件を満たしています",
+      "yellow": "CPU 性能が推奨を下回ります",
+      "red": "CPU は最低要件を満たしません",
+      "missing": "CPU 情報が検出されませんでした",
+      "unknown": "CPU の状態が不明です"
+    },
+    "memoryTotal": {
+      "name": "総メモリ",
+      "green": "総メモリは十分です",
+      "yellow": "総メモリが少なめです",
+      "red": "総メモリが不足しています",
+      "missing": "メモリ情報が検出されませんでした",
+      "unknown": "メモリの状態が不明です"
+    },
+    "memoryAvailable": {
+      "name": "利用可能メモリ",
+      "green": "利用可能メモリは十分です",
+      "yellow": "利用可能メモリが少なめです",
+      "red": "利用可能メモリが不足しています",
+      "missing": "利用可能メモリが検出されませんでした",
+      "unknown": "利用可能メモリの状態が不明です"
+    },
+    "disk": {
+      "name": "ディスク容量",
+      "green": "ディスク容量は十分です",
+      "yellow": "ディスク容量が少なめです",
+      "red": "ディスク容量が不足しています",
+      "missing": "ディスク情報が検出されませんでした",
+      "unknown": "ディスクの状態が不明です"
+    },
+    "node": {
+      "name": "Node.js",
+      "green": "Node.js はインストール済みです",
+      "yellow": "Node.js のバージョンが推奨を下回ります",
+      "red": "Node.js のバージョンが非互換です",
+      "missing": "Node.js が検出されませんでした",
+      "unknown": "Node.js の状態が不明です"
+    },
+    "npm": {
+      "name": "npm",
+      "green": "npm はインストール済みです",
+      "yellow": "npm のバージョンが推奨を下回ります",
+      "red": "npm が利用できません",
+      "missing": "npm が検出されませんでした",
+      "unknown": "npm の状態が不明です"
+    },
+    "git": {
+      "name": "Git",
+      "green": "Git はインストール済みです",
+      "yellow": "Git のバージョンが推奨を下回ります",
+      "red": "Git が利用できません",
+      "missing": "Git が検出されませんでした",
+      "unknown": "Git の状態が不明です"
+    },
+    "path": {
+      "name": "PATH 環境変数",
+      "green": "PATH は正しく構成されています",
+      "yellow": "PATH に欠落項目があります",
+      "red": "PATH の構成に問題があります",
+      "missing": "PATH が検出されませんでした",
+      "unknown": "PATH の状態が不明です"
+    },
+    "network": {
+      "name": "ネットワーク接続",
+      "green": "ネットワーク接続は正常です",
+      "yellow": "一部ネットワーク遅延が高めです",
+      "red": "ネットワーク接続に失敗しました",
+      "missing": "ネットワーク情報が検出されませんでした",
+      "unknown": "ネットワークの状態が不明です"
+    },
+    "envConflicts": {
+      "name": "環境変数の競合",
+      "green": "環境変数の競合はありません",
+      "yellow": "軽微な環境変数の競合があります",
+      "red": "重大な環境変数の競合があります",
+      "missing": "環境変数情報が検出されませんでした",
+      "unknown": "環境変数の状態が不明です"
+    },
+    "admin": {
+      "name": "管理者権限",
+      "green": "管理者権限は不要です",
+      "yellow": "管理者として実行することを推奨します",
+      "red": "管理者権限が必要です",
+      "missing": "権限情報が検出されませんでした",
+      "unknown": "権限の状態が不明です"
+    },
+    "psPolicy": {
+      "name": "PowerShell 実行ポリシー",
+      "green": "PowerShell ポリシーは実行を許可しています",
+      "yellow": "PowerShell ポリシーは制限されています",
+      "red": "PowerShell ポリシーが実行をブロックします",
+      "missing": "PowerShell ポリシーが検出されませんでした",
+      "unknown": "PowerShell ポリシーの状態が不明です"
+    },
+    "systemProxy": {
+      "name": "システムプロキシ",
+      "green": "システムプロキシは正しく構成されています",
+      "yellow": "システムプロキシが接続に影響する可能性があります",
+      "red": "システムプロキシの構成に問題があります",
+      "missing": "システムプロキシが検出されませんでした",
+      "unknown": "システムプロキシの状態が不明です"
+    },
+    "defender": {
+      "name": "Windows Defender",
+      "green": "Defender 除外設定が構成されています",
+      "yellow": "Defender がパフォーマンスに影響する可能性があります",
+      "red": "Defender が操作をブロックする可能性があります",
+      "missing": "Defender の状態が検出されませんでした",
+      "unknown": "Defender 除外設定の追加を推奨します",
+      "docs": "Defender 設定ドキュメントを表示"
+    },
+    "rosetta": {
+      "name": "Rosetta 2",
+      "green": "Rosetta 2 はインストール済みです",
+      "yellow": "Rosetta 2 の状態が互換性に影響する可能性があります",
+      "red": "Rosetta 2 が見つかりません — 一部機能が利用できません",
+      "missing": "Rosetta 2 が検出されませんでした",
+      "unknown": "Rosetta 2 の状態が不明です",
+      "docs": "Rosetta 2 インストールガイドを表示"
+    },
+    "workdirWritable": {
+      "name": "ワークスペース書き込み可能",
+      "green": "ワークスペースは書き込み可能です",
+      "yellow": "ワークスペースの権限が制限されています",
+      "red": "ワークスペースは書き込み不可です",
+      "missing": "ワークスペースが検出されませんでした",
+      "unknown": "ワークスペースの状態が不明です"
+    }
   },
   "apps": {
     "claude": "Claude",
@@ -2957,6 +3117,7 @@
       "settingsLabel": "settings.json オーバーレイ（JSON オブジェクト）",
       "errors": {
         "nameRequired": "名前は必須です",
+        "nameDuplicate": "同名のプロファイルが既に存在します",
         "settingsInvalidJson": "JSON 形式が不正です",
         "settingsMustBeObject": "settings.json は JSON オブジェクトである必要があります"
       }
@@ -3038,6 +3199,7 @@
       "next": "次へ",
       "retry": "再試行",
       "cannotCancel": "この処理は取消できません",
+      "cancelBatch": "キューをキャンセル",
       "toast": {
         "success": "修復が完了しました",
         "failed": "修復に失敗しました"

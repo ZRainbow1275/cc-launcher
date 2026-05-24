@@ -94,6 +94,7 @@ export function GeneralSettingsD4Section() {
     mutationFn: (next: Locale) => settingsD4.set_locale(next),
     onSuccess: (_result, newLocale) => {
       void queryClient.invalidateQueries({ queryKey: LOCALE_QUERY_KEY });
+      window.localStorage.setItem("language", newLocale);
       void i18n.changeLanguage(newLocale);
     },
     onError: () => {

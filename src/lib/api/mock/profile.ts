@@ -62,6 +62,23 @@ export const profileMock = {
     const parsed = ProfileCreatePayload.parse(payload);
     if (shouldFail(DOMAIN, "create")) throw errors.networkUnreachable;
     await delay();
+    const trimmedName = parsed.name.trim();
+    const hasDuplicate = getState().profiles.some(
+      (p) =>
+        p.target_cli === parsed.target_cli &&
+        p.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+    );
+    if (hasDuplicate) {
+      throw {
+        code: "PROFILE_NAME_DUPLICATE",
+        message: {
+          zh: "已存在同名 Profile",
+          en: "A profile with this name already exists",
+          ja: "同名のプロファイルが既に存在します",
+        },
+        retryable: false,
+      };
+    }
     const ts = Date.now();
     const profile = Profile.parse({
       id: generateId(parsed.target_cli),

@@ -109,7 +109,7 @@ describe("SandboxSettings", () => {
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
   });
 
-  it("toggling an L1 switch off calls set_l1_rule and updates state", async () => {
+  it("toggling an L1 switch off opens the DangerousConfirm dialog (A1 fix)", async () => {
     renderWithClient(<SandboxSettings />);
     const sw = await screen.findByTestId("l1-rule-L1.rm_arbitrary-switch");
 
@@ -119,11 +119,11 @@ describe("SandboxSettings", () => {
 
     fireEvent.click(sw);
 
-    await waitFor(async () => {
-      const rules = await sandboxMock.get_l1_rules();
-      const r = rules.find((x) => x.id === "L1.rm_arbitrary");
-      expect(r?.enabled).toBe(false);
-    });
+    expect(await screen.findByTestId("dangerous-confirm-step-1")).toBeTruthy();
+
+    const rules = await sandboxMock.get_l1_rules();
+    const r = rules.find((x) => x.id === "L1.rm_arbitrary");
+    expect(r?.enabled).toBe(true);
   });
 
   it("L2 redlines render with permanent-lock badge", async () => {

@@ -728,7 +728,167 @@
       "defaultCostMultiplierRequired": "默认倍率不能为空",
       "defaultCostMultiplierInvalid": "默认倍率格式不正确"
     },
-    "saveFailedGeneric": "保存失败，请重试"
+    "saveFailedGeneric": "保存失败，请重试",
+    "uiMode": {
+      "label": "界面模式",
+      "hint": "小白模式仅显示核心操作；专家模式解锁全部高级面板",
+      "novice": "小白模式",
+      "expert": "专家模式",
+      "switchFailed": "切换失败"
+    },
+    "locale": {
+      "label": "界面语言",
+      "hint": "切换后立即生效，并持久化到后端配置",
+      "switchFailed": "切换失败"
+    }
+  },
+  "probe": {
+    "os": {
+      "name": "操作系统",
+      "green": "操作系统正常",
+      "yellow": "操作系统警告",
+      "red": "操作系统不兼容",
+      "missing": "未检测到操作系统信息",
+      "unknown": "操作系统状态未知"
+    },
+    "arch": {
+      "name": "系统架构",
+      "green": "架构兼容",
+      "yellow": "架构警告",
+      "red": "架构不支持",
+      "missing": "未检测到架构信息",
+      "unknown": "架构状态未知"
+    },
+    "cpu": {
+      "name": "CPU",
+      "green": "CPU 满足要求",
+      "yellow": "CPU 性能偏低",
+      "red": "CPU 不满足最低要求",
+      "missing": "未检测到 CPU 信息",
+      "unknown": "CPU 状态未知"
+    },
+    "memoryTotal": {
+      "name": "内存总量",
+      "green": "内存总量充足",
+      "yellow": "内存总量偏低",
+      "red": "内存总量不足",
+      "missing": "未检测到内存信息",
+      "unknown": "内存状态未知"
+    },
+    "memoryAvailable": {
+      "name": "可用内存",
+      "green": "可用内存充足",
+      "yellow": "可用内存偏低",
+      "red": "可用内存不足",
+      "missing": "未检测到可用内存",
+      "unknown": "可用内存状态未知"
+    },
+    "disk": {
+      "name": "磁盘空间",
+      "green": "磁盘空间充足",
+      "yellow": "磁盘空间偏低",
+      "red": "磁盘空间不足",
+      "missing": "未检测到磁盘信息",
+      "unknown": "磁盘状态未知"
+    },
+    "node": {
+      "name": "Node.js",
+      "green": "Node.js 已安装",
+      "yellow": "Node.js 版本过低",
+      "red": "Node.js 版本不兼容",
+      "missing": "未检测到 Node.js",
+      "unknown": "Node.js 状态未知"
+    },
+    "npm": {
+      "name": "npm",
+      "green": "npm 已安装",
+      "yellow": "npm 版本过低",
+      "red": "npm 不可用",
+      "missing": "未检测到 npm",
+      "unknown": "npm 状态未知"
+    },
+    "git": {
+      "name": "Git",
+      "green": "Git 已安装",
+      "yellow": "Git 版本过低",
+      "red": "Git 不可用",
+      "missing": "未检测到 Git",
+      "unknown": "Git 状态未知"
+    },
+    "path": {
+      "name": "PATH 环境变量",
+      "green": "PATH 配置正常",
+      "yellow": "PATH 存在缺失项",
+      "red": "PATH 配置异常",
+      "missing": "未检测到 PATH",
+      "unknown": "PATH 状态未知"
+    },
+    "network": {
+      "name": "网络连通性",
+      "green": "网络连通正常",
+      "yellow": "部分网络延迟较高",
+      "red": "网络连通失败",
+      "missing": "未检测到网络信息",
+      "unknown": "网络状态未知"
+    },
+    "envConflicts": {
+      "name": "环境变量冲突",
+      "green": "未发现环境变量冲突",
+      "yellow": "存在少量环境变量冲突",
+      "red": "存在严重环境变量冲突",
+      "missing": "未检测到环境变量信息",
+      "unknown": "环境变量状态未知"
+    },
+    "admin": {
+      "name": "管理员权限",
+      "green": "无需管理员权限",
+      "yellow": "建议以管理员身份运行",
+      "red": "需要管理员权限",
+      "missing": "未检测到权限信息",
+      "unknown": "权限状态未知"
+    },
+    "psPolicy": {
+      "name": "PowerShell 执行策略",
+      "green": "PowerShell 策略允许执行",
+      "yellow": "PowerShell 策略偏严格",
+      "red": "PowerShell 策略禁止执行",
+      "missing": "未检测到 PowerShell 策略",
+      "unknown": "PowerShell 策略状态未知"
+    },
+    "systemProxy": {
+      "name": "系统代理",
+      "green": "系统代理配置正常",
+      "yellow": "系统代理可能影响连通",
+      "red": "系统代理异常",
+      "missing": "未检测到系统代理",
+      "unknown": "系统代理状态未知"
+    },
+    "defender": {
+      "name": "Windows Defender",
+      "green": "已添加 Defender 排除项",
+      "yellow": "Defender 可能影响性能",
+      "red": "Defender 拦截可能导致失败",
+      "missing": "未检测到 Defender 状态",
+      "unknown": "建议添加 Defender 排除项",
+      "docs": "查看 Defender 配置文档"
+    },
+    "rosetta": {
+      "name": "Rosetta 2",
+      "green": "Rosetta 2 已安装",
+      "yellow": "Rosetta 2 状态可能影响兼容性",
+      "red": "缺少 Rosetta 2，部分功能不可用",
+      "missing": "未检测到 Rosetta 2",
+      "unknown": "Rosetta 2 状态未知",
+      "docs": "查看 Rosetta 2 安装说明"
+    },
+    "workdirWritable": {
+      "name": "工作目录可写",
+      "green": "工作目录可写",
+      "yellow": "工作目录权限受限",
+      "red": "工作目录不可写",
+      "missing": "未检测到工作目录",
+      "unknown": "工作目录状态未知"
+    }
   },
   "apps": {
     "claude": "Claude",
@@ -2957,6 +3117,7 @@
       "settingsLabel": "settings.json 增量（JSON 对象）",
       "errors": {
         "nameRequired": "请填写名称",
+        "nameDuplicate": "已存在同名 Profile",
         "settingsInvalidJson": "JSON 格式错误",
         "settingsMustBeObject": "settings.json 必须是 JSON 对象"
       }
@@ -3038,6 +3199,7 @@
       "next": "下一项",
       "retry": "重试",
       "cannotCancel": "此操作无法取消",
+      "cancelBatch": "取消队列",
       "toast": {
         "success": "修复成功",
         "failed": "修复失败"

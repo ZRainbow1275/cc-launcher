@@ -200,6 +200,12 @@ export function SystemCheckDashboard({
     void queryClient.invalidateQueries({ queryKey: SYSTEM_PROBE_QUERY_KEY });
   };
 
+  const handleFixBatchAbort = (): void => {
+    setBatchQueue([]);
+    setActiveFix(null);
+    void queryClient.invalidateQueries({ queryKey: SYSTEM_PROBE_QUERY_KEY });
+  };
+
   const overall = query.data?.overallStatus ?? "unknown";
 
   return (
@@ -322,6 +328,7 @@ export function SystemCheckDashboard({
           action={activeFix.action}
           batchRemaining={batchQueue.length}
           onClose={handleFixDialogClose}
+          onAbortBatch={handleFixBatchAbort}
         />
       ) : null}
     </div>

@@ -728,7 +728,167 @@
       "defaultCostMultiplierRequired": "Default multiplier is required",
       "defaultCostMultiplierInvalid": "Invalid multiplier format"
     },
-    "saveFailedGeneric": "Save failed, please try again"
+    "saveFailedGeneric": "Save failed, please try again",
+    "uiMode": {
+      "label": "UI Mode",
+      "hint": "Novice mode shows core actions only; Expert mode unlocks all advanced panels",
+      "novice": "Novice",
+      "expert": "Expert",
+      "switchFailed": "Switch failed"
+    },
+    "locale": {
+      "label": "Display Language",
+      "hint": "Takes effect immediately and persists to backend config",
+      "switchFailed": "Switch failed"
+    }
+  },
+  "probe": {
+    "os": {
+      "name": "Operating System",
+      "green": "Operating system OK",
+      "yellow": "Operating system warning",
+      "red": "Operating system incompatible",
+      "missing": "Operating system not detected",
+      "unknown": "Operating system status unknown"
+    },
+    "arch": {
+      "name": "Architecture",
+      "green": "Architecture compatible",
+      "yellow": "Architecture warning",
+      "red": "Architecture not supported",
+      "missing": "Architecture not detected",
+      "unknown": "Architecture status unknown"
+    },
+    "cpu": {
+      "name": "CPU",
+      "green": "CPU meets requirements",
+      "yellow": "CPU below recommended",
+      "red": "CPU does not meet minimum requirements",
+      "missing": "CPU information not detected",
+      "unknown": "CPU status unknown"
+    },
+    "memoryTotal": {
+      "name": "Total Memory",
+      "green": "Sufficient total memory",
+      "yellow": "Low total memory",
+      "red": "Insufficient total memory",
+      "missing": "Memory information not detected",
+      "unknown": "Memory status unknown"
+    },
+    "memoryAvailable": {
+      "name": "Available Memory",
+      "green": "Sufficient available memory",
+      "yellow": "Low available memory",
+      "red": "Insufficient available memory",
+      "missing": "Available memory not detected",
+      "unknown": "Available memory status unknown"
+    },
+    "disk": {
+      "name": "Disk Space",
+      "green": "Sufficient disk space",
+      "yellow": "Low disk space",
+      "red": "Insufficient disk space",
+      "missing": "Disk information not detected",
+      "unknown": "Disk status unknown"
+    },
+    "node": {
+      "name": "Node.js",
+      "green": "Node.js installed",
+      "yellow": "Node.js version below recommended",
+      "red": "Node.js version incompatible",
+      "missing": "Node.js not detected",
+      "unknown": "Node.js status unknown"
+    },
+    "npm": {
+      "name": "npm",
+      "green": "npm installed",
+      "yellow": "npm version below recommended",
+      "red": "npm unavailable",
+      "missing": "npm not detected",
+      "unknown": "npm status unknown"
+    },
+    "git": {
+      "name": "Git",
+      "green": "Git installed",
+      "yellow": "Git version below recommended",
+      "red": "Git unavailable",
+      "missing": "Git not detected",
+      "unknown": "Git status unknown"
+    },
+    "path": {
+      "name": "PATH Environment",
+      "green": "PATH configured correctly",
+      "yellow": "PATH has missing entries",
+      "red": "PATH misconfigured",
+      "missing": "PATH not detected",
+      "unknown": "PATH status unknown"
+    },
+    "network": {
+      "name": "Network Connectivity",
+      "green": "Network connectivity OK",
+      "yellow": "Some network latency is high",
+      "red": "Network connectivity failed",
+      "missing": "Network information not detected",
+      "unknown": "Network status unknown"
+    },
+    "envConflicts": {
+      "name": "Environment Variable Conflicts",
+      "green": "No environment variable conflicts",
+      "yellow": "Minor environment variable conflicts",
+      "red": "Severe environment variable conflicts",
+      "missing": "Environment variable information not detected",
+      "unknown": "Environment variable status unknown"
+    },
+    "admin": {
+      "name": "Administrator Privileges",
+      "green": "Administrator privileges not required",
+      "yellow": "Administrator mode recommended",
+      "red": "Administrator privileges required",
+      "missing": "Privilege information not detected",
+      "unknown": "Privilege status unknown"
+    },
+    "psPolicy": {
+      "name": "PowerShell Execution Policy",
+      "green": "PowerShell policy allows execution",
+      "yellow": "PowerShell policy is restrictive",
+      "red": "PowerShell policy blocks execution",
+      "missing": "PowerShell policy not detected",
+      "unknown": "PowerShell policy status unknown"
+    },
+    "systemProxy": {
+      "name": "System Proxy",
+      "green": "System proxy configured correctly",
+      "yellow": "System proxy may affect connectivity",
+      "red": "System proxy misconfigured",
+      "missing": "System proxy not detected",
+      "unknown": "System proxy status unknown"
+    },
+    "defender": {
+      "name": "Windows Defender",
+      "green": "Defender exclusions configured",
+      "yellow": "Defender may affect performance",
+      "red": "Defender may block operations",
+      "missing": "Defender status not detected",
+      "unknown": "Consider adding Defender exclusions",
+      "docs": "View Defender configuration docs"
+    },
+    "rosetta": {
+      "name": "Rosetta 2",
+      "green": "Rosetta 2 installed",
+      "yellow": "Rosetta 2 status may affect compatibility",
+      "red": "Rosetta 2 missing — some features unavailable",
+      "missing": "Rosetta 2 not detected",
+      "unknown": "Rosetta 2 status unknown",
+      "docs": "View Rosetta 2 installation guide"
+    },
+    "workdirWritable": {
+      "name": "Workspace Writable",
+      "green": "Workspace writable",
+      "yellow": "Workspace permissions limited",
+      "red": "Workspace not writable",
+      "missing": "Workspace not detected",
+      "unknown": "Workspace status unknown"
+    }
   },
   "apps": {
     "claude": "Claude",
@@ -2957,6 +3117,7 @@
       "settingsLabel": "settings.json overlay (JSON object)",
       "errors": {
         "nameRequired": "Name is required",
+        "nameDuplicate": "A profile with this name already exists",
         "settingsInvalidJson": "Invalid JSON",
         "settingsMustBeObject": "settings.json must be a JSON object"
       }
@@ -3038,6 +3199,7 @@
       "next": "Next",
       "retry": "Retry",
       "cannotCancel": "This step cannot be cancelled",
+      "cancelBatch": "Cancel queue",
       "toast": {
         "success": "Fix completed",
         "failed": "Fix failed"

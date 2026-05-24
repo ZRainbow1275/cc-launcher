@@ -58,6 +58,7 @@ interface ProfileEditorProps {
   providerOptions: ProviderOption[];
   mcpOptions: McpOption[];
   skillOptions: SkillOption[];
+  existingNames?: string[];
   onClose: () => void;
   onSubmitCreate: (payload: ProfileCreatePayload) => Promise<void> | void;
   onSubmitUpdate: (
@@ -119,6 +120,7 @@ export function ProfileEditor({
   providerOptions,
   mcpOptions,
   skillOptions,
+  existingNames = [],
   onClose,
   onSubmitCreate,
   onSubmitUpdate,
@@ -161,8 +163,20 @@ export function ProfileEditor({
 
   function validate(): boolean {
     const next: Record<string, string> = {};
-    if (!form.name.trim()) {
+    const trimmedName = form.name.trim();
+    if (!trimmedName) {
       next.name = t("profile.editor.errors.nameRequired");
+    } else {
+      const currentName =
+        mode && mode.kind === "edit" ? mode.profile.name.trim() : null;
+      const duplicate = existingNames.some(
+        (n) =>
+          n.trim().toLowerCase() === trimmedName.toLowerCase() &&
+          n.trim() !== currentName,
+      );
+      if (duplicate) {
+        next.name = t("profile.editor.errors.nameDuplicate");
+      }
     }
     const settings = form.settings_json.trim() || "{}";
     try {

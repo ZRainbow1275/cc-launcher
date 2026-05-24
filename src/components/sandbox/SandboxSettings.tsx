@@ -270,6 +270,7 @@ export function SandboxSettings({ className }: SandboxSettingsProps) {
         <Tabs
           value={currentLevel}
           onValueChange={handleLevelChange}
+          activationMode="manual"
           data-testid="sandbox-level-tabs"
         >
           <TabsList>

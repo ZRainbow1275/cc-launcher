@@ -66,7 +66,7 @@ export function L1RuleEditor({
     statusBadge = (
       <Badge
         variant="destructive"
-        className="gap-1 text-[10px]"
+        className="gap-1 border-transparent bg-red-700 text-[10px] text-white hover:bg-red-700/90"
         data-testid={`l1-rule-${rule.id}-status-permanent`}
       >
         <Lock className="h-3 w-3" aria-hidden="true" />
@@ -136,7 +136,13 @@ export function L1RuleEditor({
       <div className="flex items-center gap-3 sm:flex-col sm:items-end">
         <Switch
           checked={rule.enabled}
-          onCheckedChange={(value) => onToggle(rule, value)}
+          onCheckedChange={(value) => {
+            if (!value && rule.enabled && !isUnlocked && !isPermanent) {
+              onRequestUnlock(rule);
+              return;
+            }
+            onToggle(rule, value);
+          }}
           disabled={busy || isPermanent || isUnlocked}
           aria-label={t(ruleTitleKey(rule))}
           data-testid={`l1-rule-${rule.id}-switch`}

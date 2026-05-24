@@ -242,6 +242,7 @@ export function ProfileManager({
         providerOptions={providerOptions}
         mcpOptions={mcpOptions}
         skillOptions={skillOptions}
+        existingNames={(profilesQuery.data ?? []).map((p) => p.name)}
         isSubmitting={createMutation.isPending || updateMutation.isPending}
         onClose={() => {
           setEditorOpen(false);

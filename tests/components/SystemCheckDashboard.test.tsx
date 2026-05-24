@@ -106,7 +106,7 @@ describe("SystemCheckDashboard", () => {
       { timeout: 5000 },
     );
 
-    const closeBtn = screen.getByTestId("fix-dialog-close");
+    const closeBtn = screen.getByTestId("fix-dialog-action");
     fireEvent.click(closeBtn);
 
     await waitFor(() => {

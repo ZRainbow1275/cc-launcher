@@ -114,7 +114,7 @@ export function SafetySummary({
               <Badge
                 variant="destructive"
                 data-testid="launcher-safety-l2-count"
-                className="text-xs"
+                className="border-transparent bg-red-700 text-xs text-white hover:bg-red-700/90"
               >
                 {t("launcher.safety.l2Count", { count: data.l2RedlineCount })}
               </Badge>

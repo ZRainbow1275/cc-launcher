@@ -81,6 +81,7 @@ interface FixActionDialogProps {
   action: FixAction;
   batchRemaining: number;
   onClose: () => void;
+  onAbortBatch?: () => void;
 }
 
 export function FixActionDialog({
@@ -88,6 +89,7 @@ export function FixActionDialog({
   action,
   batchRemaining,
   onClose,
+  onAbortBatch,
 }: FixActionDialogProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -250,7 +252,18 @@ export function FixActionDialog({
                   {t("systemCheck.fix.retry")}
                 </Button>
               ) : null}
-              <Button onClick={onClose} data-testid="fix-dialog-close">
+              {batchRemaining > 0 && onAbortBatch ? (
+                <Button
+                  variant="outline"
+                  onClick={onAbortBatch}
+                  data-testid="fix-dialog-cancel-batch"
+                >
+                  {t("systemCheck.fix.cancelBatch", {
+                    defaultValue: t("common.cancel"),
+                  })}
+                </Button>
+              ) : null}
+              <Button onClick={onClose} data-testid="fix-dialog-action">
                 {batchRemaining > 0
                   ? t("systemCheck.fix.next")
                   : t("common.close")}

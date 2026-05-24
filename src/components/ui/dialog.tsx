@@ -75,6 +75,7 @@ const DialogContent = React.forwardRef<
         <DialogOverlay zIndex={zIndex} className={overlayClassName} />
         <DialogPrimitive.Content
           ref={ref}
+          aria-modal="true"
           className={cn(variantClass, zIndexMap[zIndex], className)}
           onInteractOutside={(e) => {
             // 防止点击遮罩层关闭对话框
