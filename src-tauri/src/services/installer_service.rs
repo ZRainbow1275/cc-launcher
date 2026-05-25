@@ -107,6 +107,7 @@ impl InstallerService {
 mod tests {
     use super::*;
     use crate::services::installer::registry_probe::REGISTRY_DEFS;
+    use serial_test::serial;
 
     #[test]
     fn registry_defs_match_research_whitelist() {
@@ -126,6 +127,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn detect_node_returns_uninstalled_when_runtime_missing() {
         // Point CC_SWITCH_TEST_HOME to an empty tmpdir → no private runtime exists.
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -138,6 +140,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn detect_cli_returns_uninstalled_when_prefix_missing() {
         let tmp = tempfile::tempdir().expect("tempdir");
         std::env::set_var("CC_SWITCH_TEST_HOME", tmp.path());
@@ -147,6 +150,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn uninstall_is_idempotent_when_nothing_installed() {
         let tmp = tempfile::tempdir().expect("tempdir");
         std::env::set_var("CC_SWITCH_TEST_HOME", tmp.path());
