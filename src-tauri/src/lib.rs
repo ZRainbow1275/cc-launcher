@@ -433,6 +433,21 @@ pub fn run() {
             // 设置 AppHandle 用于代理故障转移时的 UI 更新
             app_state.proxy_service.set_app_handle(app.handle().clone());
 
+            // 沙盒基线注入：把 disableBypassPermissionsMode 与 deny 规则写到 ~/.claude/settings.json，
+            // 给 Codex 写最低 approval_policy 基线。读 L1Store 决定是否禁用 bypass。
+            // 失败仅记录，不阻塞启动 —— 后续 launcher_service 在每次 spawn 前会再做 verify+repair。
+            {
+                let l1_store = crate::sandbox::L1Store::new(app_state.db.clone());
+                if let Err(e) =
+                    crate::services::settings_injection::inject_claude_settings(&l1_store)
+                {
+                    log::warn!("startup: inject_claude_settings failed: {e}");
+                }
+                if let Err(e) = crate::services::settings_injection::inject_codex_baseline() {
+                    log::warn!("startup: inject_codex_baseline failed: {e}");
+                }
+            }
+
             // ============================================================
             // 按表独立判断的导入逻辑（各类数据独立检查，互不影响）
             // ============================================================

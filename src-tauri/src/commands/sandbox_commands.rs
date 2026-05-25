@@ -34,7 +34,21 @@ pub async fn sandbox_set_l1_rule(
     rule_id: String,
     enabled: bool,
 ) -> Result<L1Rule, String> {
-    sandbox::set_l1_rule(&state.db, &rule_id, enabled).map_err(Into::into)
+    let updated = sandbox::set_l1_rule(&state.db, &rule_id, enabled).map_err(String::from)?;
+
+    // 状态切回 enabled=true 时，把 disableBypassPermissionsMode 写回 settings.json；
+    // 关掉时移除。该操作仅对 L1.claude_skip_permissions 有意义。失败仅记录。
+    if rule_id == "L1.claude_skip_permissions" {
+        let result = if enabled {
+            crate::services::settings_injection::restore_bypass_block()
+        } else {
+            crate::services::settings_injection::remove_bypass_block()
+        };
+        if let Err(e) = result {
+            log::warn!("sandbox_set_l1_rule: bypass-block sync failed: {e}");
+        }
+    }
+    Ok(updated)
 }
 
 /// Unlock an L1 rule with the 24h keyword. Returns `OperationResult` on
@@ -47,6 +61,15 @@ pub async fn sandbox_unlock_l1_rule(
     keyword: String,
 ) -> Result<OperationResult, String> {
     sandbox::unlock_l1_rule(&state.db, &rule_id, &keyword).map_err(String::from)?;
+
+    // L1.claude_skip_permissions 解锁后，必须把 ~/.claude/settings.json 里的
+    // disableBypassPermissionsMode 暂时移除，否则 CLI 自身仍会拒绝 bypass。
+    // 失败仅记录日志，避免影响解锁主流程。
+    if rule_id == "L1.claude_skip_permissions" {
+        if let Err(e) = crate::services::settings_injection::remove_bypass_block() {
+            log::warn!("sandbox_unlock_l1_rule: remove_bypass_block failed: {e}");
+        }
+    }
     Ok(OperationResult::ok())
 }
 

@@ -192,15 +192,15 @@ describe("SandboxSettings", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByTestId("l1-rule-L1.claude_skip_permissions"),
+        screen.getByTestId("l1-rule-L1.network_revshell"),
       ).toBeTruthy();
     });
 
     expect(
-      screen.queryByTestId("l1-rule-L1.claude_skip_permissions-unlock"),
+      screen.queryByTestId("l1-rule-L1.network_revshell-unlock"),
     ).toBeNull();
     expect(
-      screen.getByTestId("l1-rule-L1.claude_skip_permissions-status-permanent"),
+      screen.getByTestId("l1-rule-L1.network_revshell-status-permanent"),
     ).toBeTruthy();
   });
 

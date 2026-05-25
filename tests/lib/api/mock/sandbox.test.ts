@@ -34,7 +34,7 @@ describe("sandboxMock.set_l1_rule", () => {
 
   it("throws when trying to disable a non-unlockable rule", async () => {
     await expect(
-      sandboxMock.set_l1_rule("L1.claude_skip_permissions", false),
+      sandboxMock.set_l1_rule("L1.network_revshell", false),
     ).rejects.toMatchObject({ code: "L1_RULE_NOT_UNLOCKABLE" });
   });
 
@@ -60,7 +60,7 @@ describe("sandboxMock.unlock_l1_rule", () => {
 
   it("refuses to unlock a non-unlockable rule", async () => {
     await expect(
-      sandboxMock.unlock_l1_rule("L1.claude_skip_permissions", "UNLOCK"),
+      sandboxMock.unlock_l1_rule("L1.network_revshell", "UNLOCK"),
     ).rejects.toMatchObject({ code: "L1_RULE_NOT_UNLOCKABLE" });
   });
 });

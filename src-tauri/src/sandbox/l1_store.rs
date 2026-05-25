@@ -132,8 +132,10 @@ pub fn default_rules() -> Vec<L1Rule> {
             title_key: "sandbox.l1.claude_skip_permissions.title".to_string(),
             description_key: "sandbox.l1.claude_skip_permissions.desc".to_string(),
             enabled: true,
-            // 这条规则会让 CLI 自己绕过所有保护 —— **永不可解锁**
-            unlockable: false,
+            // 用户可在知情同意 ("I UNDERSTAND") 下临时解锁 24h；settings_injection
+            // 模块负责把 disableBypassPermissionsMode 写回 ~/.claude/settings.json
+            // 以兜底直跑 claude CLI 的场景。
+            unlockable: true,
             unlocked_until: None,
             updated_at: ts,
         },
@@ -144,7 +146,7 @@ pub fn default_rules() -> Vec<L1Rule> {
             title_key: "sandbox.l1.codex_yolo.title".to_string(),
             description_key: "sandbox.l1.codex_yolo.desc".to_string(),
             enabled: true,
-            unlockable: false,
+            unlockable: true,
             unlocked_until: None,
             updated_at: ts,
         },
@@ -190,15 +192,26 @@ impl L1Store {
         if let Some(json) = raw {
             match serde_json::from_str::<Vec<L1Rule>>(&json) {
                 Ok(mut rules) => {
-                    // 清理已过期的临时解锁戳
                     let now_ts = now();
                     let mut dirty = false;
+                    // 清理已过期的临时解锁戳
                     for r in rules.iter_mut() {
                         if let Some(until) = r.unlocked_until {
                             if until <= now_ts {
                                 r.unlocked_until = None;
                                 dirty = true;
                             }
+                        }
+                    }
+                    // 迁移：旧安装版本曾把 claude_skip_permissions / codex_yolo 烤成
+                    // unlockable=false；现在用户可以在知情同意下解锁。force-update。
+                    for r in rules.iter_mut() {
+                        if (r.id == "L1.claude_skip_permissions" || r.id == "L1.codex_yolo")
+                            && !r.unlockable
+                        {
+                            r.unlockable = true;
+                            r.updated_at = now_ts;
+                            dirty = true;
                         }
                     }
                     if dirty {
@@ -333,8 +346,17 @@ mod tests {
     #[test]
     fn set_enabled_rejects_disabling_non_unlockable_rule() {
         let store = L1Store::new(make_db());
-        let result = store.set_enabled("L1.claude_skip_permissions", false);
+        let result = store.set_enabled("L1.network_revshell", false);
         assert!(matches!(result, Err(SandboxError::RuleNotUnlockable(_))));
+    }
+
+    #[test]
+    fn set_enabled_allows_disabling_claude_skip_permissions() {
+        let store = L1Store::new(make_db());
+        let updated = store
+            .set_enabled("L1.claude_skip_permissions", false)
+            .expect("claude_skip_permissions is now unlockable, should disable");
+        assert!(!updated.enabled);
     }
 
     #[test]
@@ -376,8 +398,56 @@ mod tests {
     #[test]
     fn unlock_non_unlockable_rule_rejected() {
         let store = L1Store::new(make_db());
-        let res = store.unlock("L1.claude_skip_permissions", "I UNDERSTAND");
+        let res = store.unlock("L1.network_revshell", "I UNDERSTAND");
         assert!(matches!(res, Err(SandboxError::RuleNotUnlockable(_))));
+    }
+
+    #[test]
+    fn unlock_claude_skip_permissions_accepted() {
+        let store = L1Store::new(make_db());
+        let res = store
+            .unlock("L1.claude_skip_permissions", "I UNDERSTAND")
+            .expect("claude_skip_permissions is now unlockable");
+        assert!(res.success);
+        assert!(res.unlocked_until.is_some());
+    }
+
+    #[test]
+    fn unlock_codex_yolo_accepted() {
+        let store = L1Store::new(make_db());
+        let res = store
+            .unlock("L1.codex_yolo", "I UNDERSTAND")
+            .expect("codex_yolo is now unlockable");
+        assert!(res.success);
+        assert!(res.unlocked_until.is_some());
+    }
+
+    #[test]
+    fn migration_force_updates_unlockable_for_legacy_persisted_rules() {
+        // 模拟旧版本持久化：claude_skip_permissions + codex_yolo unlockable=false
+        let store = L1Store::new(make_db());
+        let mut rules = store.list().expect("seed");
+        for r in rules.iter_mut() {
+            if r.id == "L1.claude_skip_permissions" || r.id == "L1.codex_yolo" {
+                r.unlockable = false;
+            }
+        }
+        store.save(&rules).expect("save legacy shape");
+
+        // 下次 list() 触发迁移
+        let migrated = store.list().expect("list after migration");
+        let claude = migrated
+            .iter()
+            .find(|r| r.id == "L1.claude_skip_permissions")
+            .unwrap();
+        let codex = migrated.iter().find(|r| r.id == "L1.codex_yolo").unwrap();
+        let revshell = migrated
+            .iter()
+            .find(|r| r.id == "L1.network_revshell")
+            .unwrap();
+        assert!(claude.unlockable, "migration should flip claude_skip_permissions to unlockable");
+        assert!(codex.unlockable, "migration should flip codex_yolo to unlockable");
+        assert!(!revshell.unlockable, "network_revshell must remain permanently locked");
     }
 
     #[test]

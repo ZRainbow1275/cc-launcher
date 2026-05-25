@@ -232,6 +232,24 @@ impl LauncherService {
         // 7) Assemble the CLI command vector — the launchee, not the terminal yet.
         let sandbox_level = sandbox::get_sandbox_level(&db).unwrap_or(SandboxLevel::Strict);
         let l1_unlocked = collect_unlocked_l1_ids(&db);
+
+        // 7a) Tamper detection: 用户/外部进程可能删了 ~/.claude/settings.json 里的
+        // disableBypassPermissionsMode 或 deny 规则。Spawn 前再校验一次，失败就重新注入。
+        // 失败不阻断 launch —— 拦截是兜底层，记录日志即可。
+        if opts.cli == TargetCli::Claude {
+            let l1_store = crate::sandbox::L1Store::new(db.clone());
+            if !crate::services::settings_injection::verify_claude_integrity(&l1_store) {
+                log::info!(
+                    "launcher_service: claude settings integrity check failed, re-injecting"
+                );
+                if let Err(e) =
+                    crate::services::settings_injection::inject_claude_settings(&l1_store)
+                {
+                    log::warn!("launcher_service: re-inject claude settings failed: {e}");
+                }
+            }
+        }
+
         let assembled = assemble_cli_command(
             opts.cli,
             &cli_bin,
