@@ -767,6 +767,14 @@
       "missing": "未检测到 CPU 信息",
       "unknown": "CPU 状态未知"
     },
+    "memory": {
+      "name": "内存",
+      "green": "内存充足",
+      "yellow": "可用内存偏低",
+      "red": "内存不足",
+      "missing": "未检测到内存信息",
+      "unknown": "内存状态未知"
+    },
     "memoryTotal": {
       "name": "内存总量",
       "green": "内存总量充足",
@@ -845,7 +853,8 @@
       "yellow": "建议以管理员身份运行",
       "red": "需要管理员权限",
       "missing": "未检测到权限信息",
-      "unknown": "权限状态未知"
+      "unknown": "权限状态未知",
+      "docs": "查看管理员权限配置说明"
     },
     "psPolicy": {
       "name": "PowerShell 执行策略",
@@ -853,7 +862,9 @@
       "yellow": "PowerShell 策略偏严格",
       "red": "PowerShell 策略禁止执行",
       "missing": "未检测到 PowerShell 策略",
-      "unknown": "PowerShell 策略状态未知"
+      "unknown": "PowerShell 策略状态未知",
+      "docs": "查看 PowerShell 执行策略文档",
+      "notApplicable": "当前平台不适用"
     },
     "systemProxy": {
       "name": "系统代理",
@@ -861,7 +872,8 @@
       "yellow": "系统代理可能影响连通",
       "red": "系统代理异常",
       "missing": "未检测到系统代理",
-      "unknown": "系统代理状态未知"
+      "unknown": "系统代理状态未知",
+      "docs": "查看系统代理配置说明"
     },
     "defender": {
       "name": "Windows Defender",
@@ -879,7 +891,14 @@
       "red": "缺少 Rosetta 2，部分功能不可用",
       "missing": "未检测到 Rosetta 2",
       "unknown": "Rosetta 2 状态未知",
-      "docs": "查看 Rosetta 2 安装说明"
+      "docs": "查看 Rosetta 2 安装说明",
+      "notApplicable": "当前平台无需 Rosetta 2"
+    },
+    "workdirExists": {
+      "name": "工作目录存在",
+      "green": "工作目录已就绪",
+      "missing": "未检测到工作目录",
+      "unknown": "工作目录状态未知"
     },
     "workdirWritable": {
       "name": "工作目录可写",

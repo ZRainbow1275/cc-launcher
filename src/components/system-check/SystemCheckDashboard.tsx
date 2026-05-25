@@ -20,7 +20,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { systemProbe } from "@/lib/api/mock";
 import type {
   FixAction,
@@ -302,24 +301,20 @@ export function SystemCheckDashboard({
         </Card>
       ) : null}
 
-      <ScrollArea
-        className={embedded ? "max-h-[60vh] pr-2" : "max-h-[70vh] pr-2"}
-      >
-        <div className="space-y-3" data-testid="system-check-groups">
-          {GROUP_ORDER.map((group) => {
-            const items = groupedItems.get(group) ?? [];
-            if (items.length === 0) return null;
-            return (
-              <ProbeCardGroup
-                key={group}
-                title={t(GROUP_TITLE_KEY[group])}
-                items={items}
-                onRequestFix={handleFixOne}
-              />
-            );
-          })}
-        </div>
-      </ScrollArea>
+      <div className="space-y-3" data-testid="system-check-groups">
+        {GROUP_ORDER.map((group) => {
+          const items = groupedItems.get(group) ?? [];
+          if (items.length === 0) return null;
+          return (
+            <ProbeCardGroup
+              key={group}
+              title={t(GROUP_TITLE_KEY[group])}
+              items={items}
+              onRequestFix={handleFixOne}
+            />
+          );
+        })}
+      </div>
 
       {activeFix ? (
         <FixActionDialog

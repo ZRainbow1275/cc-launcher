@@ -1,3 +1,5 @@
+import { isTauri } from "@tauri-apps/api/core";
+
 import type { MockController, ScenarioId } from "../contracts";
 import {
   cliStateReal,
@@ -32,7 +34,10 @@ function isMockMode(): boolean {
     const flag = import.meta.env?.VITE_MOCK_IPC;
     if (flag === "1") return true;
     if (flag === "0") return false;
-    // Default: keep mock in dev (no Tauri runtime), real in prod build.
+    // Use Tauri's official runtime detection. When the webview hosts the
+    // app, the Tauri runtime sets `globalThis.isTauri = true` synchronously
+    // before any user JS runs, so this is safe at module-init time.
+    if (isTauri()) return false;
     return import.meta.env?.DEV === true;
   } catch {
     return true;

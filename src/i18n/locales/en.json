@@ -767,6 +767,14 @@
       "missing": "CPU information not detected",
       "unknown": "CPU status unknown"
     },
+    "memory": {
+      "name": "Memory",
+      "green": "Memory sufficient",
+      "yellow": "Available memory low",
+      "red": "Memory insufficient",
+      "missing": "Memory information not detected",
+      "unknown": "Memory status unknown"
+    },
     "memoryTotal": {
       "name": "Total Memory",
       "green": "Sufficient total memory",
@@ -845,7 +853,8 @@
       "yellow": "Administrator mode recommended",
       "red": "Administrator privileges required",
       "missing": "Privilege information not detected",
-      "unknown": "Privilege status unknown"
+      "unknown": "Privilege status unknown",
+      "docs": "View administrator privileges guide"
     },
     "psPolicy": {
       "name": "PowerShell Execution Policy",
@@ -853,7 +862,9 @@
       "yellow": "PowerShell policy is restrictive",
       "red": "PowerShell policy blocks execution",
       "missing": "PowerShell policy not detected",
-      "unknown": "PowerShell policy status unknown"
+      "unknown": "PowerShell policy status unknown",
+      "docs": "View PowerShell execution policy docs",
+      "notApplicable": "Not applicable on this platform"
     },
     "systemProxy": {
       "name": "System Proxy",
@@ -861,7 +872,8 @@
       "yellow": "System proxy may affect connectivity",
       "red": "System proxy misconfigured",
       "missing": "System proxy not detected",
-      "unknown": "System proxy status unknown"
+      "unknown": "System proxy status unknown",
+      "docs": "View system proxy configuration docs"
     },
     "defender": {
       "name": "Windows Defender",
@@ -879,7 +891,14 @@
       "red": "Rosetta 2 missing — some features unavailable",
       "missing": "Rosetta 2 not detected",
       "unknown": "Rosetta 2 status unknown",
-      "docs": "View Rosetta 2 installation guide"
+      "docs": "View Rosetta 2 installation guide",
+      "notApplicable": "Rosetta 2 not applicable on this platform"
+    },
+    "workdirExists": {
+      "name": "Workspace Exists",
+      "green": "Workspace ready",
+      "missing": "Workspace not detected",
+      "unknown": "Workspace status unknown"
     },
     "workdirWritable": {
       "name": "Workspace Writable",

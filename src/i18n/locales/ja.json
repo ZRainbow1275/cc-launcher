@@ -767,6 +767,14 @@
       "missing": "CPU 情報が検出されませんでした",
       "unknown": "CPU の状態が不明です"
     },
+    "memory": {
+      "name": "メモリ",
+      "green": "メモリは十分です",
+      "yellow": "利用可能メモリが少なめです",
+      "red": "メモリが不足しています",
+      "missing": "メモリ情報が検出されませんでした",
+      "unknown": "メモリの状態が不明です"
+    },
     "memoryTotal": {
       "name": "総メモリ",
       "green": "総メモリは十分です",
@@ -845,7 +853,8 @@
       "yellow": "管理者として実行することを推奨します",
       "red": "管理者権限が必要です",
       "missing": "権限情報が検出されませんでした",
-      "unknown": "権限の状態が不明です"
+      "unknown": "権限の状態が不明です",
+      "docs": "管理者権限ガイドを表示"
     },
     "psPolicy": {
       "name": "PowerShell 実行ポリシー",
@@ -853,7 +862,9 @@
       "yellow": "PowerShell ポリシーは制限されています",
       "red": "PowerShell ポリシーが実行をブロックします",
       "missing": "PowerShell ポリシーが検出されませんでした",
-      "unknown": "PowerShell ポリシーの状態が不明です"
+      "unknown": "PowerShell ポリシーの状態が不明です",
+      "docs": "PowerShell 実行ポリシードキュメントを表示",
+      "notApplicable": "このプラットフォームでは対象外です"
     },
     "systemProxy": {
       "name": "システムプロキシ",
@@ -861,7 +872,8 @@
       "yellow": "システムプロキシが接続に影響する可能性があります",
       "red": "システムプロキシの構成に問題があります",
       "missing": "システムプロキシが検出されませんでした",
-      "unknown": "システムプロキシの状態が不明です"
+      "unknown": "システムプロキシの状態が不明です",
+      "docs": "システムプロキシ設定ドキュメントを表示"
     },
     "defender": {
       "name": "Windows Defender",
@@ -879,7 +891,14 @@
       "red": "Rosetta 2 が見つかりません — 一部機能が利用できません",
       "missing": "Rosetta 2 が検出されませんでした",
       "unknown": "Rosetta 2 の状態が不明です",
-      "docs": "Rosetta 2 インストールガイドを表示"
+      "docs": "Rosetta 2 インストールガイドを表示",
+      "notApplicable": "このプラットフォームでは Rosetta 2 は不要です"
+    },
+    "workdirExists": {
+      "name": "ワークスペースの存在",
+      "green": "ワークスペースは準備完了です",
+      "missing": "ワークスペースが検出されませんでした",
+      "unknown": "ワークスペースの状態が不明です"
     },
     "workdirWritable": {
       "name": "ワークスペース書き込み可能",

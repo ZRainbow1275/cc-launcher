@@ -51,7 +51,11 @@ pub enum ProbeGroup {
 /// factors" (Defender / Admin / PsPolicy / SystemProxy / Rosetta) where
 /// MVP only points the user at documentation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
 pub enum FixAction {
     InstallNode { target_lts_major: u8 },
     InstallGit,
