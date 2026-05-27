@@ -39,7 +39,7 @@ jobs:
             $safe = "manual-$env:GITHUB_RUN_NUMBER"
           }
           "version_label=$safe" >> $env:GITHUB_OUTPUT
-          "artifact_name=CC-Launcher-windows-$safe-test" >> $env:GITHUB_OUTPUT
+          "artifact_name=CC-Launcher-windows-$safe" >> $env:GITHUB_OUTPUT
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -174,12 +174,14 @@ jobs:
           Note: %LOCALAPPDATA%\cc-switch is intentionally kept for compatibility with original CC Switch data.
           "@ | ForEach-Object { $_ -replace '^          ', '' } | Set-Content -Path (Join-Path $releaseAssets 'README-WINDOWS-BLANK-TEST.md') -Encoding UTF8
 
-          Get-ChildItem -Path $releaseAssets -File |
+          $shaLines = Get-ChildItem -Path $releaseAssets -File |
             Where-Object { $_.Name -ne 'SHA256SUMS.txt' } |
             ForEach-Object {
               $hash = Get-FileHash -Algorithm SHA256 -Path $_.FullName
               "$($hash.Hash.ToLowerInvariant()) *$($_.Name)"
-            } | Set-Content -Path (Join-Path $releaseAssets 'SHA256SUMS.txt') -Encoding ASCII
+            }
+          $shaPath = Join-Path (Resolve-Path $releaseAssets).Path 'SHA256SUMS.txt'
+          [System.IO.File]::WriteAllText($shaPath, ($shaLines -join "`n") + "`n", [System.Text.Encoding]::ASCII)
 
           Get-ChildItem -Path $releaseAssets -File | Format-Table Name, Length
 
