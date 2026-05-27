@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm tauri dev",
-    "build": "pnpm tauri build",
+    "build": "pnpm run build:package",
+    "build:package": "pnpm tauri build --config src-tauri/tauri.package.conf.json",
+    "build:release": "pnpm tauri build",
     "tauri": "tauri",
     "dev:renderer": "vite",
     "build:renderer": "vite build",

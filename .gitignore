@@ -28,5 +28,12 @@ flatpak-repo/
 copilot-api
 .history
 CODEBUDDY.md
+.qa-screenshots/
+.serena/
+artifacts/
 .github
+!.github/
+.github/*
+!.github/workflows/
+!.github/workflows/*
 mainWindow.js

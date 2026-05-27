@@ -1,0 +1,306 @@
+name: macOS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_label:
+        description: "Artifact version label, for example v3.15.0-test1"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-build-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    name: Build signed macOS artifacts
+    runs-on: macos-14
+    environment: macos-release
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.12.3
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add macOS targets
+        shell: bash
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Validate signing environment
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          required_vars=(
+            APPLE_CERTIFICATE
+            APPLE_CERTIFICATE_PASSWORD
+            KEYCHAIN_PASSWORD
+            APPLE_ID
+            APPLE_PASSWORD
+            APPLE_TEAM_ID
+            TAURI_SIGNING_PRIVATE_KEY
+          )
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "$var is missing. Add it to the GitHub Actions Environment 'macos-release'." >&2
+              exit 1
+            fi
+          done
+
+      - name: Prepare Tauri signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          RAW="$TAURI_SIGNING_PRIVATE_KEY_SECRET"
+          KEY_PATH="$RUNNER_TEMP/tauri_signing.key"
+
+          if printf '%s\n' "$RAW" | head -n1 | grep -q '^untrusted comment:'; then
+            printf '%s\n' "$RAW" > "$KEY_PATH"
+          else
+            if DECODED=$(printf '%s' "$RAW" | (base64 --decode 2>/dev/null || base64 -D 2>/dev/null)) \
+               && printf '%s\n' "$DECODED" | head -n1 | grep -q '^untrusted comment:'; then
+              printf '%s\n' "$DECODED" > "$KEY_PATH"
+            else
+              if printf '%s' "$RAW" | grep -Eq '^[A-Za-z0-9+/=]+$'; then
+                ONE=$(printf '%s' "$RAW" | tr -d '\r\n')
+                printf '%s\n%s\n' "untrusted comment: tauri signing key" "$ONE" > "$KEY_PATH"
+              else
+                echo "TAURI_SIGNING_PRIVATE_KEY format is not recognized." >&2
+                exit 1
+              fi
+            fi
+          fi
+
+          {
+            echo "TAURI_SIGNING_PRIVATE_KEY<<EOF"
+            cat "$KEY_PATH"
+            echo "EOF"
+            echo "TAURI_PRIVATE_KEY<<EOF"
+            cat "$KEY_PATH"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET:-}" ]; then
+            {
+              echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET"
+              echo "TAURI_PRIVATE_KEY_PASSWORD=$TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Import Apple signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          printf '%s' "${{ secrets.APPLE_CERTIFICATE }}" | (base64 --decode 2>/dev/null || base64 -D) > "$CERT_PATH"
+
+          ORIGINAL_DEFAULT_KEYCHAIN=$(security default-keychain -d user | tr -d '"' | xargs)
+          echo "ORIGINAL_DEFAULT_KEYCHAIN=$ORIGINAL_DEFAULT_KEYCHAIN" >> "$GITHUB_ENV"
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | grep "Developer ID Application" | grep -oE '"[^"]+"' | head -1 | tr -d '"')
+          if [ -z "$IDENTITY" ]; then
+            echo "No 'Developer ID Application' identity found." >&2
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+            exit 1
+          fi
+          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          rm -f "$CERT_PATH"
+
+      - name: Build Tauri universal macOS app
+        shell: bash
+        timeout-minutes: 60
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm tauri build --target universal-apple-darwin
+
+      - name: Prepare macOS artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+
+          VERSION_LABEL="${{ inputs.version_label }}"
+          VERSION_LABEL="${VERSION_LABEL//\//-}"
+          VERSION_LABEL="${VERSION_LABEL// /-}"
+
+          TAR_GZ=""
+          APP_PATH=""
+          for path in \
+            "src-tauri/target/universal-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/aarch64-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/x86_64-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/release/bundle/macos"; do
+            if [ -d "$path" ]; then
+              [ -z "$TAR_GZ" ] && TAR_GZ=$(find "$path" -maxdepth 1 -name "*.tar.gz" -type f | head -1 || true)
+              [ -z "$APP_PATH" ] && APP_PATH=$(find "$path" -maxdepth 1 -name "*.app" -type d | head -1 || true)
+            fi
+          done
+
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found after Tauri build." >&2
+            exit 1
+          fi
+
+          xcrun stapler staple "$APP_PATH"
+
+          if [ -n "$TAR_GZ" ]; then
+            NEW_TAR_GZ="CC-Launcher-${VERSION_LABEL}-macOS.tar.gz"
+            cp "$TAR_GZ" "release-assets/$NEW_TAR_GZ"
+            [ -f "$TAR_GZ.sig" ] && cp "$TAR_GZ.sig" "release-assets/$NEW_TAR_GZ.sig"
+          fi
+
+          ZIP_STAGE_DIR="$RUNNER_TEMP/zip-stage"
+          rm -rf "$ZIP_STAGE_DIR"
+          mkdir -p "$ZIP_STAGE_DIR"
+          ditto "$APP_PATH" "$ZIP_STAGE_DIR/CC Launcher.app"
+          ditto -c -k --sequesterRsrc --keepParent "$ZIP_STAGE_DIR/CC Launcher.app" \
+            "release-assets/CC-Launcher-${VERSION_LABEL}-macOS.zip"
+          rm -rf "$ZIP_STAGE_DIR"
+
+          if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            echo "APPLE_SIGNING_IDENTITY is missing before DMG creation." >&2
+            exit 1
+          fi
+
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install create-dmg
+          DMG_STAGE_DIR="$RUNNER_TEMP/dmg-stage"
+          rm -rf "$DMG_STAGE_DIR"
+          mkdir -p "$DMG_STAGE_DIR"
+          ditto "$APP_PATH" "$DMG_STAGE_DIR/CC Launcher.app"
+
+          create-dmg \
+            --volname "CC Launcher" \
+            --background "src-tauri/icons/dmg-background.png" \
+            --window-size 660 400 \
+            --window-pos 200 120 \
+            --icon-size 80 \
+            --icon "CC Launcher.app" 180 220 \
+            --hide-extension "CC Launcher.app" \
+            --app-drop-link 480 220 \
+            --codesign "$APPLE_SIGNING_IDENTITY" \
+            --no-internet-enable \
+            "release-assets/CC-Launcher-${VERSION_LABEL}-macOS.dmg" \
+            "$DMG_STAGE_DIR"
+
+          rm -rf "$DMG_STAGE_DIR"
+
+      - name: Notarize macOS DMG
+        shell: bash
+        timeout-minutes: 30
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          DMG_PATH=$(find release-assets -maxdepth 1 -name "*.dmg" -type f | head -1 || true)
+          if [ -z "$DMG_PATH" ]; then
+            echo "No .dmg found in release-assets." >&2
+            exit 1
+          fi
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$DMG_PATH"
+
+      - name: Verify macOS code signing and notarization
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find src-tauri/target -path "*/bundle/macos/*.app" -type d | head -1 || true)
+          DMG_PATH=$(find release-assets -maxdepth 1 -name "*.dmg" -type f | head -1 || true)
+
+          if [ -z "$APP_PATH" ] || [ -z "$DMG_PATH" ]; then
+            echo "Missing .app or .dmg for verification." >&2
+            exit 1
+          fi
+
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          spctl -a -t exec -vv "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+
+          codesign --verify --verbose=2 "$DMG_PATH"
+          spctl -a -t open --context context:primary-signature -vv "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: CC-Launcher-macos-${{ inputs.version_label }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Clean up Apple signing keychain
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${ORIGINAL_DEFAULT_KEYCHAIN:-}" ]; then
+            security default-keychain -s "$ORIGINAL_DEFAULT_KEYCHAIN" || true
+          fi
+          if [ -f "$RUNNER_TEMP/build.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+          fi
