@@ -1,0 +1,192 @@
+name: Windows Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_label:
+        description: "Artifact version label, for example v3.15.0-windows-test"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref_name }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows-test:
+    name: Build Windows test artifacts
+    runs-on: windows-2022
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Normalize artifact labels
+        id: labels
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $raw = '${{ inputs.version_label }}'
+          if ([string]::IsNullOrWhiteSpace($raw)) {
+            $raw = "manual-$env:GITHUB_RUN_NUMBER"
+          }
+          $safe = $raw -replace '[^A-Za-z0-9._-]', '-'
+          if ([string]::IsNullOrWhiteSpace($safe)) {
+            $safe = "manual-$env:GITHUB_RUN_NUMBER"
+          }
+          "version_label=$safe" >> $env:GITHUB_OUTPUT
+          "artifact_name=CC-Launcher-windows-$safe-test" >> $env:GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.12.3
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Windows app
+        timeout-minutes: 60
+        run: pnpm build:package
+
+      - name: Prepare Windows test artifacts
+        shell: pwsh
+        env:
+          VERSION_LABEL: ${{ steps.labels.outputs.version_label }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseAssets = 'release-assets'
+          New-Item -ItemType Directory -Force -Path $releaseAssets | Out-Null
+
+          $bundleRoots = @(
+            'src-tauri/target/release/bundle',
+            'src-tauri/target/x86_64-pc-windows-msvc/release/bundle'
+          ) | Where-Object { Test-Path $_ }
+
+          if ($bundleRoots.Count -eq 0) {
+            throw 'No Windows Tauri bundle directory found.'
+          }
+
+          $msi = Get-ChildItem -Path $bundleRoots -Recurse -Filter '*.msi' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if ($null -eq $msi) {
+            throw 'No Windows MSI installer found after Tauri build.'
+          }
+
+          $nsis = Get-ChildItem -Path $bundleRoots -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match '[\\/](nsis)([\\/]|$)' -or $_.Name -match 'setup|installer' } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if ($null -eq $nsis) {
+            throw 'No Windows NSIS setup executable found after Tauri build.'
+          }
+
+          $msiDest = Join-Path $releaseAssets "CC-Launcher-$env:VERSION_LABEL-Windows.msi"
+          $nsisDest = Join-Path $releaseAssets "CC-Launcher-$env:VERSION_LABEL-Windows-setup.exe"
+          Copy-Item $msi.FullName $msiDest
+          Copy-Item $nsis.FullName $nsisDest
+
+          $exeCandidates = @(
+            'src-tauri/target/release/CC Launcher.exe',
+            'src-tauri/target/x86_64-pc-windows-msvc/release/CC Launcher.exe',
+            'src-tauri/target/release/cc-launcher.exe',
+            'src-tauri/target/x86_64-pc-windows-msvc/release/cc-launcher.exe'
+          )
+          $exePath = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($null -ne $exePath) {
+            $portableDir = Join-Path $env:RUNNER_TEMP 'CC-Launcher-Portable'
+            Remove-Item -Recurse -Force $portableDir -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+            Copy-Item $exePath (Join-Path $portableDir 'CC Launcher.exe')
+            @(
+              '# CC Launcher portable build marker',
+              'portable=true'
+            ) | Set-Content -Path (Join-Path $portableDir 'portable.ini') -Encoding UTF8
+            Compress-Archive -Path (Join-Path $portableDir '*') -DestinationPath (Join-Path $releaseAssets "CC-Launcher-$env:VERSION_LABEL-Windows-Portable.zip") -Force
+          } else {
+            Write-Warning 'Portable executable was not found; installer artifacts are still available.'
+          }
+
+          @"
+          # CC Launcher Windows Blank-Machine Test
+
+          Candidate: CC Launcher $env:VERSION_LABEL
+          Source commit: ${{ github.sha }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Use this package on a clean Windows VPS without preinstalling Node.js, npm, Git, Claude Code, or Codex. The test target is the launcher-owned private runtime and CLI install flow.
+
+          ## Must Check
+
+          1. Windows installer UI, Start Menu entry, app title, and installed program name show CC Launcher.
+          2. On first launch, system detection does not depend on system Node/npm/CLI being installed.
+          3. Open installer source settings, set your VPS npm registry / Node dist mirror / Git for Windows mirror if needed, then save.
+          4. Run Node repair/install from the app. It should install private Node under %LOCALAPPDATA%\cc-switch\runtime\node.
+          5. Run Claude Code install from the app. It should install under %LOCALAPPDATA%\cc-switch\runtime\claude.
+          6. Run Codex install from the app. It should install under %LOCALAPPDATA%\cc-switch\runtime\codex.
+          7. Re-run detection. Node, npm, Claude Code, and Codex should turn green using the private runtime.
+          8. Create a profile, activate it, switch it, then verify the active profile shown in the app changes correctly.
+          9. Launch Claude Code / Codex from the app. In the launched terminal, claude --version and codex --version should work.
+          10. Test CLI uninstall / reinstall once. Reinstall should be idempotent and should not require system npm.
+          11. Uninstall CC Launcher from Windows Apps or Control Panel. Record whether the uninstaller removes the app cleanly and whether private runtime data remains.
+
+          ## Return These Results
+
+          - Windows version and VPS provider.
+          - Which installer was used: .exe or .msi.
+          - Whether app name is consistently CC Launcher.
+          - Screenshot or text for any red detection item after repair.
+          - The exact error text from failed install/repair steps.
+          - Whether the selected VPS mirrors were actually used.
+          - Whether these files exist after repair:
+            - %LOCALAPPDATA%\cc-switch\runtime\node\node.exe
+            - %LOCALAPPDATA%\cc-switch\runtime\claude\claude.cmd
+            - %LOCALAPPDATA%\cc-switch\runtime\codex\codex.cmd
+          - Whether claude --version and codex --version work in the launched terminal.
+          - Uninstall result.
+
+          Note: %LOCALAPPDATA%\cc-switch is intentionally kept for compatibility with original CC Switch data.
+          "@ | ForEach-Object { $_ -replace '^          ', '' } | Set-Content -Path (Join-Path $releaseAssets 'README-WINDOWS-BLANK-TEST.md') -Encoding UTF8
+
+          Get-ChildItem -Path $releaseAssets -File |
+            Where-Object { $_.Name -ne 'SHA256SUMS.txt' } |
+            ForEach-Object {
+              $hash = Get-FileHash -Algorithm SHA256 -Path $_.FullName
+              "$($hash.Hash.ToLowerInvariant()) *$($_.Name)"
+            } | Set-Content -Path (Join-Path $releaseAssets 'SHA256SUMS.txt') -Encoding ASCII
+
+          Get-ChildItem -Path $releaseAssets -File | Format-Table Name, Length
+
+      - name: Upload Windows test artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.labels.outputs.artifact_name }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
