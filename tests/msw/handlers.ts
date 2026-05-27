@@ -212,6 +212,8 @@ export const handlers = [
 
   http.post(`${TAURI_ENDPOINT}/get_settings`, () => success(getSettings())),
 
+  http.post(`${TAURI_ENDPOINT}/get_installed_skills`, () => success([])),
+
   http.post(`${TAURI_ENDPOINT}/check_env_conflicts`, () => success([])),
 
   http.post(`${TAURI_ENDPOINT}/save_settings`, async ({ request }) => {
@@ -232,6 +234,8 @@ export const handlers = [
   http.post(`${TAURI_ENDPOINT}/get_app_config_dir_override`, () =>
     success(getAppConfigDirOverride()),
   ),
+
+  http.post(`${TAURI_ENDPOINT}/set_window_theme`, () => success(true)),
 
   http.post(
     `${TAURI_ENDPOINT}/apply_claude_plugin_config`,
