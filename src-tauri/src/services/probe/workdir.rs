@@ -105,7 +105,7 @@ fn probe_workdir_writable(workdir: &Option<std::path::PathBuf>) -> ProbeItem {
                 } else {
                     "probe.workdirWritable.red"
                 };
-                let fix = if writable { None } else { None };
+                let fix = None;
                 (
                     status,
                     json!({ "path": p.display().to_string(), "writable": writable }),
