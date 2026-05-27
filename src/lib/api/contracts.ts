@@ -63,7 +63,16 @@ export const InstallProgress = z
   .strict();
 export type InstallProgress = z.infer<typeof InstallProgress>;
 
-export const RegistryName = z.enum(["npmjs", "npmmirror", "tencent", "huawei"]);
+export const InstallerSourceConfig = z
+  .object({
+    npmRegistry: z.string().url().optional(),
+    nodeDistMirror: z.string().url().optional(),
+    gitForWindowsMirror: z.string().url().optional(),
+  })
+  .strict();
+export type InstallerSourceConfig = z.infer<typeof InstallerSourceConfig>;
+
+export const RegistryName = z.string().min(1);
 export type RegistryName = z.infer<typeof RegistryName>;
 
 export const RegistryProbe = z
@@ -227,6 +236,7 @@ export const FixAction = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("installGit") }).strict(),
   z.object({ kind: z.literal("cleanEnvVar"), varName: z.string() }).strict(),
+  z.object({ kind: z.literal("createWorkdir"), path: z.string() }).strict(),
   z.object({ kind: z.literal("openHomeDir") }).strict(),
   z
     .object({

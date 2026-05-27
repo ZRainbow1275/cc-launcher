@@ -445,9 +445,18 @@ mod tests {
             .iter()
             .find(|r| r.id == "L1.network_revshell")
             .unwrap();
-        assert!(claude.unlockable, "migration should flip claude_skip_permissions to unlockable");
-        assert!(codex.unlockable, "migration should flip codex_yolo to unlockable");
-        assert!(!revshell.unlockable, "network_revshell must remain permanently locked");
+        assert!(
+            claude.unlockable,
+            "migration should flip claude_skip_permissions to unlockable"
+        );
+        assert!(
+            codex.unlockable,
+            "migration should flip codex_yolo to unlockable"
+        );
+        assert!(
+            !revshell.unlockable,
+            "network_revshell must remain permanently locked"
+        );
     }
 
     #[test]

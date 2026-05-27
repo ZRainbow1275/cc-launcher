@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 
 use crate::services::system_probe::{self, FixAction, FixProgress, ProbeItem, SystemProbeReport};
+use crate::store::AppState;
 
 /// Run the full 17-dimension probe. Returns a fully populated report.
 #[tauri::command]
@@ -54,10 +55,14 @@ pub fn probe_auto_fix_candidates(items: Vec<ProbeItem>) -> Vec<AutoFixCandidate>
 /// channel is closed once the action terminates.
 #[tauri::command]
 pub async fn apply_probe_fix(
+    state: tauri::State<'_, AppState>,
     action: FixAction,
     channel: Channel<FixProgress>,
 ) -> Result<(), String> {
-    let mut rx = system_probe::apply_fix(action);
+    let source_config =
+        super::onboarding_settings::settings_get_installer_source_config_internal(&state)
+            .map_err(|e| e.to_string())?;
+    let mut rx = system_probe::apply_fix(action, source_config);
     while let Some(progress) = rx.recv().await {
         if let Err(e) = channel.send(progress) {
             log::warn!("apply_probe_fix: channel send failed: {e}");
@@ -103,11 +108,19 @@ mod tests {
                     label_key: "probe.defender.docs".into(),
                 }),
             ),
+            green_item(
+                "workdirExists",
+                ProbeGroup::Workdir,
+                Some(FixAction::CreateWorkdir {
+                    path: "/tmp/cc-launcher-projects".into(),
+                }),
+            ),
             green_item("cpu", ProbeGroup::System, None),
         ];
         let cands = probe_auto_fix_candidates(items);
-        assert_eq!(cands.len(), 1);
+        assert_eq!(cands.len(), 2);
         assert_eq!(cands[0].item_id, "node");
+        assert_eq!(cands[1].item_id, "workdirExists");
     }
 
     #[test]

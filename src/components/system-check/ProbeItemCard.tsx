@@ -143,7 +143,10 @@ export function ProbeItemCard({ item, onRequestFix }: ProbeItemCardProps) {
   const value = formatValue(item);
   const action: FixAction | null = item.fixAction;
   const informational =
-    action?.kind === "externalLink" || INFORMATIONAL_IDS.has(item.id);
+    action?.kind === "externalLink" ||
+    action?.kind === "openHomeDir" ||
+    action?.kind === "injectPathEntries" ||
+    INFORMATIONAL_IDS.has(item.id);
 
   return (
     <div

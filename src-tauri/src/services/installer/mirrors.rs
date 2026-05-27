@@ -123,10 +123,7 @@ mod tests {
 
     #[test]
     fn node_dist_mirrors_ordered_china_first() {
-        assert!(
-            NODE_DIST_MIRRORS.len() >= 4,
-            "expected at least 4 mirrors"
-        );
+        assert!(NODE_DIST_MIRRORS.len() >= 4, "expected at least 4 mirrors");
         assert_eq!(NODE_DIST_MIRRORS[0].name, "npmmirror");
         assert_eq!(
             NODE_DIST_MIRRORS.last().expect("non-empty").name,

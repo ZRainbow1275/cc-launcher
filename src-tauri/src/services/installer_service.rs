@@ -13,6 +13,7 @@ use super::installer::node_runtime::{InstallProgress, NodeRuntime, NodeRuntimeEr
 use super::installer::registry_probe::{
     RegistryPickResult, RegistryProbeError, RegistryProbeService,
 };
+use super::installer::source_config::InstallerSourceConfig;
 
 #[derive(Debug, Error, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -74,7 +75,14 @@ impl InstallerService {
 
     /// Pick the lowest-latency npm registry.
     pub async fn smart_pick_registry() -> Result<RegistryPickResult, InstallerError> {
-        Ok(RegistryProbeService::smart_pick(false).await?)
+        Self::smart_pick_registry_with_config(&InstallerSourceConfig::default()).await
+    }
+
+    /// Pick an npm registry, honoring a persisted custom source when present.
+    pub async fn smart_pick_registry_with_config(
+        source_config: &InstallerSourceConfig,
+    ) -> Result<RegistryPickResult, InstallerError> {
+        Ok(RegistryProbeService::smart_pick_with_config(source_config, false).await?)
     }
 
     /// Streaming Node install. Callers feed progress events into Tauri Channels.
@@ -82,7 +90,18 @@ impl InstallerService {
     where
         F: FnMut(InstallProgress) + Send,
     {
-        Ok(NodeRuntime::install(on_progress).await?)
+        Self::install_node_with_config(InstallerSourceConfig::default(), on_progress).await
+    }
+
+    /// Streaming Node install with configured Node distribution mirror chain.
+    pub async fn install_node_with_config<F>(
+        source_config: InstallerSourceConfig,
+        on_progress: F,
+    ) -> Result<NodeStatus, InstallerError>
+    where
+        F: FnMut(InstallProgress) + Send,
+    {
+        Ok(NodeRuntime::install_with_config(source_config, on_progress).await?)
     }
 
     /// Streaming CLI install. Callers feed progress events into Tauri Channels.
@@ -94,7 +113,21 @@ impl InstallerService {
     where
         F: FnMut(InstallProgress) + Send,
     {
-        Ok(CliInstaller::install(cli, opts, on_progress).await?)
+        Self::install_cli_with_config(cli, opts, InstallerSourceConfig::default(), on_progress)
+            .await
+    }
+
+    /// Streaming CLI install with persisted source configuration.
+    pub async fn install_cli_with_config<F>(
+        cli: TargetCli,
+        opts: InstallOpts,
+        source_config: InstallerSourceConfig,
+        on_progress: F,
+    ) -> Result<CliInstallStatus, InstallerError>
+    where
+        F: FnMut(InstallProgress) + Send,
+    {
+        Ok(CliInstaller::install_with_source_config(cli, opts, source_config, on_progress).await?)
     }
 
     /// Uninstall = wipe the per-CLI prefix dir.

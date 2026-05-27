@@ -30,7 +30,7 @@ describe("scenario switching", () => {
     expect(getCurrentScenarioId()).toBe("claude-installed-codex-missing");
     claude = await installerMock.detect_cli("claude");
     expect(claude.installed).toBe(true);
-    expect(claude.version).toBe("2.1.148");
+    expect(claude.version).toBe("2.1.150");
   });
 
   it("resetMockScenario clears delay and failures", async () => {

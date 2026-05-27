@@ -7,16 +7,18 @@
 //!
 //! NEVER call any of these from a probe function — probes are read-only.
 //!
-//! NOTE: `InstallNode` is currently a stub that defers to the future B2
-//! installer service. It returns a `Fix::Pending` error code so the
-//! frontend can surface "task B2 not done yet" without crashing.
+//! `InstallNode` delegates to the real private Node installer service. The
+//! probe layer owns orchestration only; archive download, validation, and
+//! cleanup remain inside the installer module.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use thiserror::Error;
 
-use crate::services::system_probe::FixAction;
+use crate::services::installer::InstallerSourceConfig;
+use crate::services::installer_service::{InstallerError, InstallerService};
+use crate::services::system_probe::{FixAction, ProbeStatus};
 
 /// Categorized error returned by [`apply`].
 ///
@@ -25,8 +27,10 @@ use crate::services::system_probe::FixAction;
 #[derive(Debug, Error)]
 #[allow(dead_code)]
 pub enum FixError {
-    #[error("installer service not yet implemented (Task B2): {0}")]
-    Pending(String),
+    #[error("installer service failed: {0}")]
+    Installer(String),
+    #[error("post-fix validation failed: {0}")]
+    Validation(String),
     #[error("failed to launch external opener: {0}")]
     Opener(String),
     #[error("environment variable cleanup failed: {0}")]
@@ -43,7 +47,8 @@ impl FixError {
     /// Stable error code used by frontend i18n + telemetry.
     pub fn code(&self) -> &'static str {
         match self {
-            FixError::Pending(_) => "FIX_PENDING_B2",
+            FixError::Installer(_) => "FIX_INSTALLER_FAILED",
+            FixError::Validation(_) => "FIX_VALIDATION_FAILED",
             FixError::Opener(_) => "FIX_OPENER_FAILED",
             FixError::EnvVar(_) => "FIX_ENV_VAR_FAILED",
             FixError::PathInject(_) => "FIX_PATH_INJECT_FAILED",
@@ -56,11 +61,17 @@ impl FixError {
 /// Apply a fix action. Streaming progress is handled by the caller
 /// ([`crate::services::system_probe::apply_fix`]); this function only
 /// performs the side effect and returns Ok/Err.
-pub async fn apply(action: &FixAction) -> Result<(), FixError> {
+pub async fn apply(
+    action: &FixAction,
+    source_config: InstallerSourceConfig,
+) -> Result<(), FixError> {
     match action {
-        FixAction::InstallNode { target_lts_major } => install_node(*target_lts_major).await,
-        FixAction::InstallGit => install_git().await,
+        FixAction::InstallNode { target_lts_major } => {
+            install_node(*target_lts_major, source_config).await
+        }
+        FixAction::InstallGit => install_git(source_config).await,
         FixAction::CleanEnvVar { var_name } => clean_env_var(var_name).await,
+        FixAction::CreateWorkdir { path } => create_workdir(path).await,
         FixAction::OpenHomeDir => open_home_dir().await,
         FixAction::InjectPathEntries { entries } => inject_path_entries(entries).await,
         FixAction::ExternalLink { url, .. } => external_link(url).await,
@@ -69,14 +80,28 @@ pub async fn apply(action: &FixAction) -> Result<(), FixError> {
 
 // ---------------------------- InstallNode ------------------------------
 
-/// Stub: delegate to installer_service (Task B2). For now we return a
-/// well-known error so the frontend can route to "Task B2 not yet
-/// implemented" without crashing.
-async fn install_node(lts_major: u8) -> Result<(), FixError> {
-    log::info!("install_node requested (LTS major={lts_major}); deferring to Task B2 installer.");
-    Err(FixError::Pending(format!(
-        "Node LTS {lts_major} install requires B2 installer service"
-    )))
+/// Delegate to the private Node installer service.
+async fn install_node(lts_major: u8, source_config: InstallerSourceConfig) -> Result<(), FixError> {
+    if lts_major != 20 {
+        log::warn!(
+            "install_node requested with unsupported LTS major={lts_major}; using private Node 20 installer anyway"
+        );
+    }
+    log::info!("install_node requested; delegating to InstallerService::install_node");
+    InstallerService::install_node_with_config(source_config, |_progress| {})
+        .await
+        .map_err(|err| FixError::Installer(installer_error_message(err)))?;
+    ensure_runtime_items_green(&["node", "npm"])
+}
+
+fn installer_error_message(err: InstallerError) -> String {
+    match err {
+        InstallerError::Network(msg)
+        | InstallerError::Node(msg)
+        | InstallerError::Cli(msg)
+        | InstallerError::Io(msg)
+        | InstallerError::Internal(msg) => msg,
+    }
 }
 
 // ---------------------------- InstallGit -------------------------------
@@ -91,19 +116,27 @@ async fn install_node(lts_major: u8) -> Result<(), FixError> {
 ///   user still has a path forward.
 /// - **Linux**: open `git-scm.com/download/linux` — every distro has its own
 ///   package manager; we don't try to second-guess.
-async fn install_git() -> Result<(), FixError> {
+async fn install_git(source_config: InstallerSourceConfig) -> Result<(), FixError> {
+    #[cfg(not(target_os = "windows"))]
+    let _ = source_config;
+
     #[cfg(target_os = "windows")]
     {
         use crate::services::installer::portable_git::PortableGit;
         // cfg-gated early return — other branches (macos / linux) follow below.
         #[allow(clippy::needless_return)]
-        return PortableGit::install()
+        return PortableGit::install_with_config(source_config)
             .await
-            .map_err(|e| FixError::Other(format!("PortableGit install failed: {e}")));
+            .map_err(|e| FixError::Other(format!("PortableGit install failed: {e}")))
+            .and_then(|_| ensure_runtime_items_green(&["git"]));
     }
 
     #[cfg(target_os = "macos")]
     {
+        if runtime_item_green("git") {
+            return Ok(());
+        }
+
         // `xcode-select --install` triggers Apple's GUI dialog and exits
         // immediately. A non-zero exit means CLT is already installed or
         // the request couldn't be dispatched — in either case we fall
@@ -114,19 +147,55 @@ async fn install_git() -> Result<(), FixError> {
             .output()
             .await;
         match result {
-            Ok(out) if out.status.success() => return Ok(()),
+            Ok(out) if out.status.success() => {
+                return Err(FixError::Validation(
+                    "Command Line Tools installer opened; finish the installer and rerun the system check"
+                        .into(),
+                ));
+            }
             Ok(_) | Err(_) => {
-                return open_url(
-                    "https://developer.apple.com/download/all/?q=command%20line%20tools",
-                );
+                let _ =
+                    open_url("https://developer.apple.com/download/all/?q=command%20line%20tools");
+                return Err(FixError::Validation(
+                    "Git is still unavailable after opening the Command Line Tools install path"
+                        .into(),
+                ));
             }
         }
     }
 
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
-        open_url("https://git-scm.com/download/linux")
+        if runtime_item_green("git") {
+            return Ok(());
+        }
+        let _ = open_url("https://git-scm.com/download/linux");
+        Err(FixError::Validation(
+            "Git is still unavailable after opening the Linux install guide".into(),
+        ))
     }
+}
+
+// --------------------------- CreateWorkdir -----------------------------
+
+async fn create_workdir(path: &str) -> Result<(), FixError> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(FixError::Validation("workdir path is empty".into()));
+    }
+
+    let dir = PathBuf::from(trimmed);
+    std::fs::create_dir_all(&dir)?;
+
+    let meta = std::fs::metadata(&dir)?;
+    if !meta.is_dir() {
+        return Err(FixError::Validation(format!(
+            "workdir path is not a directory: {}",
+            dir.display()
+        )));
+    }
+
+    ensure_dir_writable(&dir)
 }
 
 // ---------------------------- CleanEnvVar ------------------------------
@@ -153,11 +222,11 @@ async fn clean_env_var(var_name: &str) -> Result<(), FixError> {
     if targets.is_empty() {
         // Already clean (or a stale fix request after re-probe).
         log::info!("clean_env_var: no live conflict for {var_name}; nothing to do");
-        return Ok(());
+        return ensure_env_var_clean(var_name);
     }
 
     delete_env_vars(targets).map_err(FixError::EnvVar)?;
-    Ok(())
+    ensure_env_var_clean(var_name)
 }
 
 // ---------------------------- OpenHomeDir ------------------------------
@@ -244,6 +313,69 @@ fn open_path(path: &Path) -> Result<(), FixError> {
     open_with_system(&s)
 }
 
+fn ensure_dir_writable(dir: &Path) -> Result<(), FixError> {
+    use std::io::Write;
+
+    let sentinel = dir.join(format!(".cc-launcher-fix-{}", std::process::id()));
+    let result = (|| -> std::io::Result<()> {
+        let mut f = std::fs::File::create(&sentinel)?;
+        f.write_all(b"cc-launcher workdir validation")?;
+        f.flush()?;
+        Ok(())
+    })();
+    let _ = std::fs::remove_file(&sentinel);
+
+    result.map_err(|e| {
+        FixError::Validation(format!("workdir is not writable: {}: {e}", dir.display()))
+    })
+}
+
+fn ensure_env_var_clean(var_name: &str) -> Result<(), FixError> {
+    let mut remaining = Vec::new();
+    for app in ["claude", "codex", "gemini"] {
+        if let Ok(conflicts) = crate::services::env_checker::check_env_conflicts(app) {
+            remaining.extend(conflicts.into_iter().filter(|c| c.var_name == var_name));
+        }
+    }
+
+    if remaining.is_empty() {
+        Ok(())
+    } else {
+        Err(FixError::Validation(format!(
+            "environment variable remains after cleanup: {var_name}"
+        )))
+    }
+}
+
+fn ensure_runtime_items_green(ids: &[&str]) -> Result<(), FixError> {
+    let items = crate::services::probe::runtime::run_all();
+    let mut failures = Vec::new();
+
+    for id in ids {
+        match items.iter().find(|item| item.id == *id) {
+            Some(item) if item.status == ProbeStatus::Green => {}
+            Some(item) => failures.push(format!("{}={:?}", item.id, item.status)),
+            None => failures.push(format!("{id}=missing probe item")),
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(FixError::Validation(format!(
+            "runtime probe did not turn green after fix: {}",
+            failures.join(", ")
+        )))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn runtime_item_green(id: &str) -> bool {
+    crate::services::probe::runtime::run_all()
+        .into_iter()
+        .any(|item| item.id == id && item.status == ProbeStatus::Green)
+}
+
 #[cfg(target_os = "windows")]
 fn open_with_system(target: &str) -> Result<(), FixError> {
     use std::os::windows::process::CommandExt;
@@ -280,15 +412,12 @@ fn open_with_system(target: &str) -> Result<(), FixError> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn install_node_is_pending_stub() {
-        let res = install_node(20).await;
-        let err = res.unwrap_err();
-        assert_eq!(err.code(), "FIX_PENDING_B2");
-        match err {
-            FixError::Pending(_) => {}
-            other => panic!("expected Pending, got {other:?}"),
-        }
+    #[test]
+    fn installer_error_message_unwraps_inner_message() {
+        assert_eq!(
+            installer_error_message(InstallerError::Node("node failed".into())),
+            "node failed"
+        );
     }
 
     #[tokio::test]
@@ -301,7 +430,8 @@ mod tests {
     #[test]
     fn fix_error_codes_are_stable() {
         let cases = [
-            (FixError::Pending("x".into()), "FIX_PENDING_B2"),
+            (FixError::Installer("x".into()), "FIX_INSTALLER_FAILED"),
+            (FixError::Validation("x".into()), "FIX_VALIDATION_FAILED"),
             (FixError::Opener("x".into()), "FIX_OPENER_FAILED"),
             (FixError::EnvVar("x".into()), "FIX_ENV_VAR_FAILED"),
             (FixError::PathInject("x".into()), "FIX_PATH_INJECT_FAILED"),
@@ -318,14 +448,28 @@ mod tests {
         assert!(res.is_ok());
     }
 
+    #[tokio::test]
+    async fn create_workdir_creates_and_validates_writable_dir() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let target = tmp.path().join("nested").join("projects");
+        assert!(!target.exists());
+
+        create_workdir(&target.display().to_string())
+            .await
+            .expect("workdir should be created");
+
+        assert!(target.is_dir());
+    }
+
     /// Sanity check: `install_git` is exposed via `apply(&FixAction::InstallGit)`
     /// and returns `Ok` or a typed `FixError` (never panics). On Windows the
     /// PortableGit install may fail without network/sandbox; on macOS the
     /// xcode-select branch is best-effort; on Linux we fall back to opening
     /// the docs URL. Either way the type contract holds.
     #[tokio::test]
+    #[ignore = "would launch platform Git installers or external docs"]
     async fn install_git_returns_typed_error_on_invalid_state() {
-        let res = apply(&FixAction::InstallGit).await;
+        let res = apply(&FixAction::InstallGit, InstallerSourceConfig::default()).await;
         match res {
             Ok(()) => {}
             Err(e) => {
@@ -333,10 +477,11 @@ mod tests {
                 let code = e.code();
                 assert!(
                     [
-                        "FIX_PENDING_B2",
+                        "FIX_INSTALLER_FAILED",
                         "FIX_OPENER_FAILED",
                         "FIX_ENV_VAR_FAILED",
                         "FIX_PATH_INJECT_FAILED",
+                        "FIX_VALIDATION_FAILED",
                         "FIX_IO_ERROR",
                         "FIX_OTHER",
                     ]

@@ -3,11 +3,13 @@
 //! Each test isolates state via a fresh `AppState` and the shared
 //! `test_mutex` to prevent concurrent test bleed-through.
 
+use cc_switch_lib::services::installer::InstallerSourceConfig;
 use cc_switch_lib::{
     install_git_test_hook, onboarding_complete_test_hook, onboarding_get_state_test_hook,
-    settings_get_locale_test_hook, settings_get_ui_mode_test_hook,
-    settings_set_locale_test_hook, settings_set_ui_mode_test_hook, Locale, OnboardingAnswers,
-    UiMode,
+    settings_get_installer_source_config_test_hook, settings_get_locale_test_hook,
+    settings_get_ui_mode_test_hook, settings_reset_installer_source_config_test_hook,
+    settings_set_installer_source_config_test_hook, settings_set_locale_test_hook,
+    settings_set_ui_mode_test_hook, Locale, OnboardingAnswers, UiMode,
 };
 
 #[path = "support.rs"]
@@ -24,7 +26,10 @@ fn onboarding_get_state_returns_default_when_unset() {
     let result = onboarding_get_state_test_hook(&state).expect("get state");
 
     assert!(!result.completed, "default completed must be false");
-    assert!(result.completed_at.is_none(), "default completed_at must be None");
+    assert!(
+        result.completed_at.is_none(),
+        "default completed_at must be None"
+    );
     assert!(result.answers.is_none(), "default answers must be None");
 }
 
@@ -116,4 +121,47 @@ fn install_git_returns_localized_stub() {
     assert!(!message.en.is_empty(), "en message must be populated");
     assert!(!message.ja.is_empty(), "ja message must be populated");
     assert!(op.error_code.is_none(), "no error_code expected");
+}
+
+#[test]
+fn installer_source_config_round_trips_and_resets() {
+    let _guard = test_mutex().lock().expect("acquire test mutex");
+    reset_test_fs();
+    let _home = ensure_test_home();
+    let state = create_test_state().expect("create test state");
+
+    let initial =
+        settings_get_installer_source_config_test_hook(&state).expect("get source config");
+    assert!(initial.is_empty(), "default source config should be empty");
+
+    let config = InstallerSourceConfig {
+        npm_registry: Some("https://vps.example.com/npm/".into()),
+        node_dist_mirror: Some("https://vps.example.com/node/".into()),
+        git_for_windows_mirror: Some("https://vps.example.com/git/".into()),
+    };
+
+    let op = settings_set_installer_source_config_test_hook(&state, config).expect("set config");
+    assert!(op.success);
+
+    let stored =
+        settings_get_installer_source_config_test_hook(&state).expect("get stored source config");
+    assert_eq!(
+        stored.npm_registry.as_deref(),
+        Some("https://vps.example.com/npm")
+    );
+    assert_eq!(
+        stored.node_dist_mirror.as_deref(),
+        Some("https://vps.example.com/node")
+    );
+    assert_eq!(
+        stored.git_for_windows_mirror.as_deref(),
+        Some("https://vps.example.com/git")
+    );
+
+    let reset =
+        settings_reset_installer_source_config_test_hook(&state).expect("reset source config");
+    assert!(reset.success);
+    let after_reset =
+        settings_get_installer_source_config_test_hook(&state).expect("get reset source config");
+    assert!(after_reset.is_empty());
 }

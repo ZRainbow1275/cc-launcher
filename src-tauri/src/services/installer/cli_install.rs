@@ -20,6 +20,7 @@ use tokio::process::Command;
 use super::node_runtime::{
     l, InstallPhase, InstallProgress, LocalizedMessage, NodeRuntime, NodeRuntimeError, TypedError,
 };
+use super::source_config::InstallerSourceConfig;
 
 /// Mirrors frontend `TargetCli` enum (lowercase wire values).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +43,7 @@ impl TargetCli {
     /// Future: read from `tools.json` schema.
     pub fn pinned_version(self) -> &'static str {
         match self {
-            TargetCli::Claude => "2.1.148",
+            TargetCli::Claude => "2.1.150",
             TargetCli::Codex => "0.133.0",
         }
     }
@@ -153,17 +154,29 @@ impl CliInstaller {
 
     /// Absolute path to the installed CLI bin (the `.bin/<name>(.cmd)` shim).
     pub fn cli_binary(cli: TargetCli) -> Result<PathBuf, CliInstallError> {
-        let prefix = Self::prefix_dir(cli)?;
         // npm with `--prefix=X`:
         //  - Windows: writes shim into X/<bin>.cmd directly (no .bin/ subdir)
         //  - Unix:    writes shim into X/bin/<bin>
         #[cfg(target_os = "windows")]
         {
-            Ok(prefix.join(format!("{}.cmd", cli.bin_name())))
+            Ok(Self::cli_bin_dir(cli)?.join(format!("{}.cmd", cli.bin_name())))
         }
         #[cfg(not(target_os = "windows"))]
         {
-            Ok(prefix.join("bin").join(cli.bin_name()))
+            Ok(Self::cli_bin_dir(cli)?.join(cli.bin_name()))
+        }
+    }
+
+    /// Directory that must be prepended to PATH for the target CLI shim.
+    pub fn cli_bin_dir(cli: TargetCli) -> Result<PathBuf, CliInstallError> {
+        let prefix = Self::prefix_dir(cli)?;
+        #[cfg(target_os = "windows")]
+        {
+            Ok(prefix)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Ok(prefix.join("bin"))
         }
     }
 
@@ -207,11 +220,28 @@ impl CliInstaller {
     pub async fn install<F>(
         cli: TargetCli,
         opts: InstallOpts,
+        on_progress: F,
+    ) -> Result<CliInstallStatus, CliInstallError>
+    where
+        F: FnMut(InstallProgress) + Send,
+    {
+        Self::install_with_source_config(cli, opts, InstallerSourceConfig::default(), on_progress)
+            .await
+    }
+
+    pub async fn install_with_source_config<F>(
+        cli: TargetCli,
+        opts: InstallOpts,
+        source_config: InstallerSourceConfig,
         mut on_progress: F,
     ) -> Result<CliInstallStatus, CliInstallError>
     where
         F: FnMut(InstallProgress) + Send,
     {
+        let source_config = source_config
+            .validated()
+            .map_err(|e| CliInstallError::Validation(format!("source config: {e}")))?;
+
         // Phase 1: probing registry (or use the user-supplied override).
         on_progress(progress(
             InstallPhase::ProbingRegistry,
@@ -224,14 +254,18 @@ impl CliInstaller {
             None,
             None,
         ));
-        let chosen_registry = match opts.registry {
-            Some(reg) => reg,
-            None => {
-                let pick = super::registry_probe::RegistryProbeService::smart_pick(false)
-                    .await
-                    .map_err(|e| CliInstallError::Validation(format!("registry probe: {e}")))?;
-                pick.chosen
-            }
+        let chosen_registry = if let Some(reg) = opts.registry.as_ref() {
+            reg.trim().trim_end_matches('/').to_string()
+        } else if let Some(reg) = source_config.npm_registry.as_ref() {
+            reg.clone()
+        } else {
+            let pick = super::registry_probe::RegistryProbeService::smart_pick_with_config(
+                &source_config,
+                false,
+            )
+            .await
+            .map_err(|e| CliInstallError::Validation(format!("registry probe: {e}")))?;
+            pick.chosen
         };
 
         // Phase 2 (conditional): installing-node if missing and not skipped.
@@ -253,7 +287,7 @@ impl CliInstaller {
                 // Inner Node-install progress events are swallowed: the outer
                 // caller has already emitted an "installing-node" event above
                 // and forwarding sub-phases would confuse the linear bar.
-                NodeRuntime::install(|_p| {}).await?;
+                NodeRuntime::install_with_config(source_config.clone(), |_p| {}).await?;
             }
         }
 
@@ -343,7 +377,10 @@ impl CliInstaller {
             .arg(&pkg)
             .arg(format!("--prefix={}", prefix.display()))
             .arg(format!("--registry={registry}"))
-            .arg(format!("--cache={}", NodeRuntime::runtime_root()?.join("npm-cache").display()))
+            .arg(format!(
+                "--cache={}",
+                NodeRuntime::runtime_root()?.join("npm-cache").display()
+            ))
             .arg("--no-audit")
             .arg("--no-fund")
             .arg("--loglevel=error")
@@ -525,22 +562,22 @@ mod tests {
     fn target_cli_constants_match_contract() {
         assert_eq!(TargetCli::Claude.npm_package(), "@anthropic-ai/claude-code");
         assert_eq!(TargetCli::Codex.npm_package(), "@openai/codex");
-        assert_eq!(TargetCli::Claude.pinned_version(), "2.1.148");
+        assert_eq!(TargetCli::Claude.pinned_version(), "2.1.150");
         assert_eq!(TargetCli::Codex.pinned_version(), "0.133.0");
     }
 
     #[test]
     fn version_regex_claude_matches_real_output() {
         let re = TargetCli::Claude.version_regex();
-        let cap = re.captures("2.1.148 (Claude Code)").unwrap();
-        assert_eq!(cap.get(1).unwrap().as_str(), "2.1.148");
+        let cap = re.captures("2.1.150 (Claude Code)").unwrap();
+        assert_eq!(cap.get(1).unwrap().as_str(), "2.1.150");
     }
 
     #[test]
     fn version_regex_claude_matches_with_only_version() {
         let re = TargetCli::Claude.version_regex();
-        let cap = re.captures("2.1.148\n").unwrap();
-        assert_eq!(cap.get(1).unwrap().as_str(), "2.1.148");
+        let cap = re.captures("2.1.150\n").unwrap();
+        assert_eq!(cap.get(1).unwrap().as_str(), "2.1.150");
     }
 
     #[test]

@@ -23,6 +23,7 @@ import type {
   CliInstallStatus,
   InstallPhase,
   InstallProgress as InstallProgressEvent,
+  InstallerSourceConfig,
   NodeStatus,
   RegistryPickResult,
   SystemProbeReport,
@@ -32,6 +33,7 @@ import { systemProbe } from "@/lib/api/mock";
 
 import { CliCard } from "./CliCard";
 import { InstallProgress } from "./InstallProgress";
+import { InstallerSourceSettings } from "./InstallerSourceSettings";
 import { REGISTRY_PROBE_QUERY_KEY, RegistryPicker } from "./RegistryPicker";
 
 type WizardStep = 1 | 2 | 3 | 4;
@@ -360,6 +362,13 @@ export function InstallerWizard({
     [installState, sortedAvailableRegistries, runInstall],
   );
 
+  const handleInstallerSourceSaved = useCallback(
+    (config: InstallerSourceConfig) => {
+      setChosenRegistry(config.npmRegistry ?? null);
+    },
+    [],
+  );
+
   const profileCount = useCallback(
     (cli: TargetCli) => {
       if (cli === "claude") return profileClaudeQuery.data?.length ?? 0;
@@ -442,60 +451,63 @@ export function InstallerWizard({
       ) : null}
 
       {stepNum === 2 ? (
-        <Card data-testid="installer-step-2">
-          <CardContent className="pt-6 space-y-4">
-            {detectNodeQuery.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t("installer.step2.detecting")}
-              </div>
-            ) : nodeReady ? (
-              <Alert data-testid="installer-step-2-ready">
-                <CheckCircle className="h-4 w-4" />
-                <AlertTitle>
-                  {t("installer.step2.ready", {
-                    version: detectNodeQuery.data?.version ?? "",
-                  })}
-                </AlertTitle>
-                <AlertDescription>
-                  <span className="text-xs text-muted-foreground">
-                    {t("installer.step2.pathLabel")}: {osNodePath()}
-                  </span>
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Alert data-testid="installer-step-2-missing">
-                <AlertTitle>{t("installer.step2.missing")}</AlertTitle>
-                <AlertDescription className="space-y-3">
-                  <p className="text-xs">
-                    {t("installer.step2.pathLabel")}:{" "}
-                    <span className="font-mono">{osNodePath()}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("installer.step2.installNote")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("installer.step2.uninstallNote")}
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={installNodeMutation.isPending}
-                    onClick={() => installNodeMutation.mutate()}
-                    data-testid="installer-step-2-install-node"
-                  >
-                    {installNodeMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : null}
-                    {installNodeMutation.isPending
-                      ? t("installer.step2.installing")
-                      : t("installer.step2.installButton")}
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-4" data-testid="installer-step-2">
+          <InstallerSourceSettings onSaved={handleInstallerSourceSaved} />
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              {detectNodeQuery.isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t("installer.step2.detecting")}
+                </div>
+              ) : nodeReady ? (
+                <Alert data-testid="installer-step-2-ready">
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertTitle>
+                    {t("installer.step2.ready", {
+                      version: detectNodeQuery.data?.version ?? "",
+                    })}
+                  </AlertTitle>
+                  <AlertDescription>
+                    <span className="text-xs text-muted-foreground">
+                      {t("installer.step2.pathLabel")}: {osNodePath()}
+                    </span>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert data-testid="installer-step-2-missing">
+                  <AlertTitle>{t("installer.step2.missing")}</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p className="text-xs">
+                      {t("installer.step2.pathLabel")}:{" "}
+                      <span className="font-mono">{osNodePath()}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("installer.step2.installNote")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("installer.step2.uninstallNote")}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={installNodeMutation.isPending}
+                      onClick={() => installNodeMutation.mutate()}
+                      data-testid="installer-step-2-install-node"
+                    >
+                      {installNodeMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : null}
+                      {installNodeMutation.isPending
+                        ? t("installer.step2.installing")
+                        : t("installer.step2.installButton")}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       {stepNum === 3 ? (
@@ -555,6 +567,7 @@ export function InstallerWizard({
 
       {stepNum === 4 ? (
         <div className="space-y-4" data-testid="installer-step-4">
+          <InstallerSourceSettings onSaved={handleInstallerSourceSaved} />
           <RegistryPicker
             selectedUrl={chosenRegistry}
             onSelect={(url) => setChosenRegistry(url)}

@@ -44,8 +44,8 @@
   },
   "firstRunNotice": {
     "title": "CC Launcher へようこそ",
-    "bodyDefault": "CC Switch は Claude Code / Codex / Gemini CLI の複数プロバイダーをワンクリックで切り替えられるツールです。すでにこれらのツールを設定済みの場合、CC Switch は現在の設定を「default」という名前のプロバイダーとして自動的に保存するので、既存の設定が失われることはありません。",
-    "bodyOfficial": "リストには「Official（公式）」プリセットも用意されており、公式バージョンに戻したくなったらクリックするだけで切り替えられます。切り替える前に現在の設定は自動で default にバックアップされるので、自由に行き来できます。これが CC Switch の仕組みです 😊",
+    "bodyDefault": "CC Launcher は Claude Code / Codex / Gemini CLI の複数プロバイダーをワンクリックで切り替えられるツールです。すでにこれらのツールを設定済みの場合、CC Launcher は現在の設定を「default」という名前のプロバイダーとして自動的に保存するので、既存の設定が失われることはありません。",
+    "bodyOfficial": "リストには「Official（公式）」プリセットも用意されており、公式バージョンに戻したくなったらクリックするだけで切り替えられます。切り替える前に現在の設定は自動で default にバックアップされるので、自由に行き来できます。これが CC Launcher の仕組みです 😊",
     "confirm": "了解しました"
   },
   "apiKeyInput": {
@@ -190,7 +190,7 @@
     "modelMappingOffHint": "プロバイダーがネイティブの Claude シリーズモデルを提供していない場合は、このスイッチを有効にしてください。",
     "modelMappingOnHint": "Claude Desktop は現在モデル ID を制限しています。お使いのプロバイダーが Claude 系列以外のモデルを提供する場合、このスイッチを有効にし、使用中はローカルルーティングを起動したままにしてください。",
     "routeMapTitle": "モデルマッピング",
-    "routeMapHint": "モデル役割を選ぶと、CC Switch が Claude Desktop 互換ルートを自動生成します。DeepSeek や Kimi などのブランド名はメニュー表示名に入れ、実際のリクエストモデルは右側の入力どおりに送信されます。",
+    "routeMapHint": "モデル役割を選ぶと、CC Launcher が Claude Desktop 互換ルートを自動生成します。DeepSeek や Kimi などのブランド名はメニュー表示名に入れ、実際のリクエストモデルは右側の入力どおりに送信されます。",
     "routeModelLabel": "モデル役割",
     "routeRoleSonnet": "Sonnet",
     "routeRoleOpus": "Opus",
@@ -226,7 +226,7 @@
     "providerDeleted": "プロバイダーを削除しました",
     "switchSuccess": "切り替え成功！",
     "claudeDesktopRestartRequired": "切り替えました。反映するには Claude Desktop を再起動してください",
-    "claudeDesktopProxyRestartRequired": "切り替えました。CC Switch を起動したまま Claude Desktop を再起動してください",
+    "claudeDesktopProxyRestartRequired": "切り替えました。CC Launcher を起動したまま Claude Desktop を再起動してください",
     "addToConfigSuccess": "設定に追加しました",
     "removeFromConfigSuccess": "設定から削除しました",
     "switchFailedTitle": "切り替えに失敗しました",
@@ -267,7 +267,7 @@
     "deleteProvider": "プロバイダーを削除",
     "deleteProviderMessage": "プロバイダー「{{name}}」を削除してもよろしいですか？この操作は元に戻せません。",
     "removeProvider": "プロバイダーを解除",
-    "removeProviderMessage": "プロバイダー「{{name}}」を設定から解除してもよろしいですか？\n\n解除後、このプロバイダーは無効になりますが、設定データは CC Switch に保持されます。いつでも再追加できます。",
+    "removeProviderMessage": "プロバイダー「{{name}}」を設定から解除してもよろしいですか？\n\n解除後、このプロバイダーは無効になりますが、設定データは CC Launcher に保持されます。いつでも再追加できます。",
     "proxy": {
       "title": "ローカルルーティングの有効化",
       "message": "ローカルルーティングは上級機能です。有効にする前に、その仕組みを理解していることをご確認ください。\n\n適切な設定方法については、関連ドキュメントまたはプロバイダーにご相談ください。",
@@ -361,7 +361,7 @@
       },
       "globalProxy": {
         "title": "グローバル送信プロキシ",
-        "description": "CC Switch が外部 API にアクセスする際のプロキシを設定"
+        "description": "CC Launcher が外部 API にアクセスする際のプロキシを設定"
       },
       "data": {
         "title": "データ管理",
@@ -431,7 +431,7 @@
     "themeDark": "ダーク",
     "themeSystem": "システム",
     "importExport": "SQL インポート/エクスポート",
-    "importExportHint": "移行や復元用にデータベースの SQL バックアップをインポート/エクスポートします（インポートは CC Switch がエクスポートしたバックアップのみ対応）。",
+    "importExportHint": "移行や復元用にデータベースの SQL バックアップをインポート/エクスポートします（インポートは CC Launcher がエクスポートしたバックアップのみ対応）。",
     "exportConfig": "SQL バックアップをエクスポート",
     "selectConfigFile": "SQL ファイルを選択",
     "noFileSelected": "ファイルが選択されていません。",
@@ -567,7 +567,7 @@
     "windowBehavior": "ウィンドウ動作",
     "windowBehaviorHint": "最小化動作や Claude プラグイン連携を設定します。",
     "launchOnStartup": "起動時に自動実行",
-    "launchOnStartupDescription": "システム起動時に CC Switch を自動起動します",
+    "launchOnStartupDescription": "システム起動時に CC Launcher を自動起動します",
     "silentStartup": "サイレント起動",
     "silentStartupDescription": "起動時にメインウィンドウを表示せず、トレイのみで起動",
     "autoLaunchFailed": "自動起動の設定に失敗しました",
@@ -589,8 +589,8 @@
     },
     "skillStorage": {
       "title": "スキル保存場所",
-      "description": "CC Switch がスキルのマスターコピーを保存するディレクトリを選択します",
-      "ccSwitch": "CC Switch",
+      "description": "CC Launcher がスキルのマスターコピーを保存するディレクトリを選択します",
+      "ccSwitch": "CC Launcher",
       "unified": "~/.agents/skills",
       "ccSwitchHint": "スキルは ~/.cc-switch/skills/ に保存され、シンボリックリンクまたはコピーで各アプリに同期されます。",
       "unifiedHint": "スキルは ~/.agents/skills/ に保存されます（Agent Skills オープン標準）。対応ツール（Claude Code、Codex、Gemini CLI など）はこのディレクトリのスキルを直接検出します。",
@@ -638,8 +638,8 @@
     },
     "configDirectoryOverride": "設定ディレクトリの上書き（詳細）",
     "configDirectoryDescription": "WSL などで Claude Code や Codex を使う場合、ここで設定ディレクトリを WSL 側に合わせるとデータを揃えられます。",
-    "appConfigDir": "CC Switch 設定ディレクトリ",
-    "appConfigDirDescription": "CC Switch の保存場所をカスタマイズします（クラウド同期フォルダを指定すると設定を同期できます）",
+    "appConfigDir": "CC Launcher 設定ディレクトリ",
+    "appConfigDirDescription": "CC Launcher の保存場所をカスタマイズします（クラウド同期フォルダを指定すると設定を同期できます）",
     "browsePlaceholderApp": "例: C:\\\\Users\\\\Administrator\\\\.cc-switch",
     "claudeConfigDir": "Claude Code 設定ディレクトリ",
     "claudeConfigDirDescription": "Claude の設定ディレクトリ（settings.json）を上書きし、claude.json（MCP）も同じ場所に置きます。",
@@ -694,7 +694,7 @@
     "importFailedError": "設定のインポートに失敗しました: {{message}}",
     "exportFailedError": "設定のエクスポートに失敗しました:",
     "restartRequired": "再起動が必要です",
-    "restartRequiredMessage": "CC Switch の設定ディレクトリを変更すると再起動が必要です。今すぐ再起動しますか？",
+    "restartRequiredMessage": "CC Launcher の設定ディレクトリを変更すると再起動が必要です。今すぐ再起動しますか？",
     "restartNow": "今すぐ再起動",
     "restartLater": "後で再起動",
     "restartFailed": "アプリの再起動に失敗しました。手動で閉じて再度開いてください。",
@@ -1034,29 +1034,29 @@
     "officialHint": "💡 公式プロバイダーはブラウザログインで、API Key は不要です",
     "getApiKey": "API Key を取得",
     "partnerPromotion": {
-      "packycode": "PackyCode は CC Switch の公式パートナーです。登録後チャージ時に \"cc-switch\" を入力すると 10% オフ",
-      "patewayai": "PatewayAI は CC Switch ユーザーに特別な特典を提供しています。このリンクから登録すると $3 のクレジットがもらえます。",
-      "claudeapi": "ClaudeAPI は CC Switch ユーザーに特別な特典を提供しています。このリンクから登録するとテストクレジットを受け取ることができます。",
+      "packycode": "PackyCode は CC Launcher の公式パートナーです。登録後チャージ時に \"cc-switch\" を入力すると 10% オフ",
+      "patewayai": "PatewayAI は CC Launcher ユーザーに特別な特典を提供しています。このリンクから登録すると $3 のクレジットがもらえます。",
+      "claudeapi": "ClaudeAPI は CC Launcher ユーザーに特別な特典を提供しています。このリンクから登録するとテストクレジットを受け取ることができます。",
       "claudecn": "ClaudeCN は登録企業が運営するエンタープライズグレードの AI ゲートウェイプラットフォームで、企業調達プロセスをサポートし、法人支払い、契約、コンプライアンス保証を提供します。",
-      "runapi": "RunAPI は CC Switch ユーザーに特別な特典を提供しています。このリンクから登録しカスタマーサポートにご連絡いただくと、¥14 の無料クレジットを受け取ることができます。",
+      "runapi": "RunAPI は CC Launcher ユーザーに特別な特典を提供しています。このリンクから登録しカスタマーサポートにご連絡いただくと、¥14 の無料クレジットを受け取ることができます。",
       "minimax_cn": "MiniMax Coding Plan 特別価格、Starter ¥9.9 から",
       "minimax_en": "MiniMax Coding Plan Black Friday、Starter が月額 $2（80% OFF）",
       "dmxapi": "Claude Code 専用モデル 66% OFF 実施中！",
-      "cubence": "Cubence は CC Switch の公式パートナーです。登録後チャージ時に \"CCSWITCH\" を入力すると、毎回 10% オフ",
-      "aigocode": "AIGoCode は CC Switch の公式パートナーです。このリンクから登録すると、初回チャージ時に 10% のボーナスクレジットがもらえます！",
-      "rightcode": "RightCode は CC Switch の公式パートナーです。このリンクから登録すると、毎回のチャージに 5% のボーナスクレジットがもらえます！",
-      "aicodemirror": "AICodeMirror は CC Switch の公式パートナーです。このリンクから登録すると20%オフ！",
-      "aicoding": "AI Coding は CC Switch ユーザー向けに特別割引を提供しています。初回チャージが 10% オフ！",
-      "crazyrouter": "CrazyRouter は CC Switch ユーザー向けに特別ボーナスを提供しています。初回チャージで 30% の追加クレジットがもらえます！",
-      "sssaicode": "SSAI Code は CC Switch ユーザー向けに特別ボーナスを提供しています。チャージごとに $10 の追加クレジットがもらえます！",
-      "siliconflow": "SiliconFlow は CC Switch の公式パートナーです",
-      "ucloud": "Compshare は CC Switch ユーザー向けに特別ボーナスを提供しています。このリンクから登録すると、5元のプラットフォーム体験クレジットがもらえます！",
-      "micu": "Micu は CC Switch の公式パートナーです",
+      "cubence": "Cubence は CC Launcher の公式パートナーです。登録後チャージ時に \"CCSWITCH\" を入力すると、毎回 10% オフ",
+      "aigocode": "AIGoCode は CC Launcher の公式パートナーです。このリンクから登録すると、初回チャージ時に 10% のボーナスクレジットがもらえます！",
+      "rightcode": "RightCode は CC Launcher の公式パートナーです。このリンクから登録すると、毎回のチャージに 5% のボーナスクレジットがもらえます！",
+      "aicodemirror": "AICodeMirror は CC Launcher の公式パートナーです。このリンクから登録すると20%オフ！",
+      "aicoding": "AI Coding は CC Launcher ユーザー向けに特別割引を提供しています。初回チャージが 10% オフ！",
+      "crazyrouter": "CrazyRouter は CC Launcher ユーザー向けに特別ボーナスを提供しています。初回チャージで 30% の追加クレジットがもらえます！",
+      "sssaicode": "SSAI Code は CC Launcher ユーザー向けに特別ボーナスを提供しています。チャージごとに $10 の追加クレジットがもらえます！",
+      "siliconflow": "SiliconFlow は CC Launcher の公式パートナーです",
+      "ucloud": "Compshare は CC Launcher ユーザー向けに特別ボーナスを提供しています。このリンクから登録すると、5元のプラットフォーム体験クレジットがもらえます！",
+      "micu": "Micu は CC Launcher の公式パートナーです",
       "ctok": "公式サイトで CTok コミュニティに参加し、プランを購読してください。",
-      "shengsuanyun": "胜算云はCC Switchユーザーに特別特典を提供しています。このリンクから登録すると、10元分の無料クレジットと初回チャージ10%ボーナスがもらえます！",
-      "lemondata": "Lemon Code は CC Switch ユーザー向けの特別オファーを提供しています。このリンクから登録すると 1 ドル分の無料クレジットがもらえます。",
-      "doubaoseed": "豆包大モデルは CC Switch ユーザーに専属特典を提供しています：このリンクから登録すると、豆包全テキストモデル50万トークンの推論クレジットおよびSeedance2.0の500万トークン無料クレジットがもらえます。",
-      "volcengine_agentplan": "火山方舟 Agent Plan は CC Switch ユーザーに専属特典を提供しています：このリンクから方舟AgentPlanを購読すると、新規のお客様は初月40元から利用できます。",
+      "shengsuanyun": "胜算云はCC Launcherユーザーに特別特典を提供しています。このリンクから登録すると、10元分の無料クレジットと初回チャージ10%ボーナスがもらえます！",
+      "lemondata": "Lemon Code は CC Launcher ユーザー向けの特別オファーを提供しています。このリンクから登録すると 1 ドル分の無料クレジットがもらえます。",
+      "doubaoseed": "豆包大モデルは CC Launcher ユーザーに専属特典を提供しています：このリンクから登録すると、豆包全テキストモデル50万トークンの推論クレジットおよびSeedance2.0の500万トークン無料クレジットがもらえます。",
+      "volcengine_agentplan": "火山方舟 Agent Plan は CC Launcher ユーザーに専属特典を提供しています：このリンクから方舟AgentPlanを購読すると、新規のお客様は初月40元から利用できます。",
       "byteplus": "このリンクから登録すると、各モデルごとに50万トークンの無料推論クォータがもらえます。"
     },
     "presets": {
@@ -1602,7 +1602,7 @@
       "deleteConfirm": "サーバー「{{id}}」を削除しますか？この操作は元に戻せません。",
       "noServers": "まだサーバーがありません",
       "enabledApps": "有効なアプリ",
-      "noImportFound": "インポートする MCP サーバーが見つかりませんでした。すべてのサーバーは CC Switch で管理されています。",
+      "noImportFound": "インポートする MCP サーバーが見つかりませんでした。すべてのサーバーは CC Launcher で管理されています。",
       "importSuccess": "{{count}} 個の MCP サーバーをインポートしました",
       "apps": {
         "claude": "Claude",
@@ -2147,10 +2147,10 @@
     "noInstalledDescription": "リポジトリからスキルを発見してインストールするか、既存のスキルをインポートしてください",
     "discover": "スキルを発見",
     "import": "既存をインポート",
-    "importDescription": "CC Switch 統合管理にインポートするスキルを選択してください",
+    "importDescription": "CC Launcher 統合管理にインポートするスキルを選択してください",
     "importSuccess": "{{count}} 件のスキルをインポートしました",
     "importSelected": "選択をインポート ({{count}})",
-    "noUnmanagedFound": "インポートするスキルが見つかりませんでした。すべてのスキルは CC Switch で管理されています。",
+    "noUnmanagedFound": "インポートするスキルが見つかりませんでした。すべてのスキルは CC Launcher で管理されています。",
     "foundIn": "発見場所",
     "local": "ローカル",
     "uninstallConfirm": "「{{name}}」をアンインストールしますか？すべてのアプリからこのスキルが削除され、削除前にローカルバックアップが自動作成されます。",
@@ -2194,7 +2194,7 @@
   },
   "deeplink": {
     "confirmImport": "プロバイダーのインポートを確認",
-    "confirmImportDescription": "次の設定をディープリンクから CC Switch へインポートします",
+    "confirmImportDescription": "次の設定をディープリンクから CC Launcher へインポートします",
     "importPrompt": "プロンプトをインポート",
     "importPromptDescription": "このシステムプロンプトをインポートするか確認してください",
     "importMcp": "MCP サーバーをインポート",
@@ -3254,6 +3254,14 @@
       "externalLink": {
         "title": "ドキュメントを開く",
         "description": "関連ドキュメントを開きます。"
+      },
+      "createWorkdir": {
+        "title": "作業ディレクトリを作成",
+        "description": "ランチャーの作業ディレクトリを作成し、書き込み可能か検証します。"
+      },
+      "errors": {
+        "FIX_VALIDATION_FAILED": "修復は実行されましたが、再チェック後も赤のままです。インストーラーまたはシステムダイアログの処理完了後に再検査してください。",
+        "FIX_INSTALLER_FAILED": "インストーラーが失敗したため、修復は完了しませんでした。"
       }
     }
   },
@@ -3303,6 +3311,20 @@
       "confirm": "次へ: インストール開始",
       "noneSelected": "続行するには少なくとも 1 つの CLI を選択してください"
     },
+    "source": {
+      "title": "インストール元の設定",
+      "description": "プライベート npm レジストリ、Node.js 配布ミラー、Git for Windows ミラーを設定します。保存後、インストールと修復に即座に反映されます。",
+      "npmRegistry": "npm レジストリ",
+      "nodeDistMirror": "Node.js 配布ミラー",
+      "gitForWindowsMirror": "Git for Windows ミラー",
+      "save": "設定を保存",
+      "saved": "インストール元を保存しました",
+      "saveFailed": "インストール元の保存に失敗しました",
+      "reset": "既定値に戻す",
+      "resetDone": "既定のインストール元に戻しました",
+      "resetFailed": "既定のインストール元への復元に失敗しました",
+      "invalidUrl": "有効な http:// または https:// URL を入力してください"
+    },
     "step4": {
       "registryPicker": {
         "title": "レジストリ探索",
@@ -3325,6 +3347,7 @@
       },
       "progress": {
         "phase": "フェーズ",
+        "source": "ソース：",
         "speed": "{{kbps}} KB/s",
         "bytes": "{{loaded}} / {{total}} KB",
         "cancel": "キャンセル",

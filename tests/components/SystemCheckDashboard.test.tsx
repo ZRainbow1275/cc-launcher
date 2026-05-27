@@ -1,12 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, within, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { FixActionDialog } from "@/components/system-check/FixActionDialog";
 import { SystemCheckDashboard } from "@/components/system-check/SystemCheckDashboard";
 import { SystemCheckSummary } from "@/components/system-check/SystemCheckSummary";
-import { renderWithMockIPC, teardownMockIPC } from "@/lib/api/mock";
+import { renderWithMockIPC, systemProbe, teardownMockIPC } from "@/lib/api/mock";
+import { probeReportNewUser } from "@/lib/api/mock/fixtures/probe";
 
 afterEach(() => {
+  vi.restoreAllMocks();
   teardownMockIPC();
 });
 
@@ -42,6 +45,9 @@ describe("SystemCheckDashboard", () => {
     expect(
       within(nodeCard).getByTestId("probe-item-node-fix"),
     ).toBeInTheDocument();
+
+    const npmCard = screen.getByTestId("probe-item-npm");
+    expect(within(npmCard).getByTestId("probe-item-npm-fix")).toBeInTheDocument();
   });
 
   it("shows all green overall for fully-configured scenario", async () => {
@@ -112,6 +118,57 @@ describe("SystemCheckDashboard", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("fix-action-dialog")).not.toBeInTheDocument();
     });
+  });
+
+  it("marks the fix as failed when the follow-up probe is still blocking", async () => {
+    vi.spyOn(systemProbe, "apply_fix").mockImplementation(async function* () {
+      yield {
+        fixId: "fix-installNode-20",
+        phase: "starting",
+        message: { zh: "fix.starting", en: "fix.starting", ja: "fix.starting" },
+        percent: 5,
+      };
+      yield {
+        fixId: "fix-installNode-20",
+        phase: "completed",
+        message: {
+          zh: "fix.completed",
+          en: "fix.completed",
+          ja: "fix.completed",
+        },
+        percent: 100,
+      };
+    });
+
+    const item = probeReportNewUser().items.find((probeItem) => {
+      return probeItem.id === "node";
+    });
+    if (!item?.fixAction) throw new Error("new-user node fixture must be fixable");
+
+    renderWithMockIPC(
+      "new-user",
+      <FixActionDialog
+        item={item}
+        action={item.fixAction}
+        batchRemaining={0}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("fix-progress-status")).toHaveTextContent(
+          "systemCheck.fix.phase.failed",
+        );
+      },
+      { timeout: 5000 },
+    );
+
+    expect(
+      screen.getByText(
+        /follow-up check is still red|修复已执行|再チェック後も赤/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("queues remaining items when fix-all is clicked", async () => {

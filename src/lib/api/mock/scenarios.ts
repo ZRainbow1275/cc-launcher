@@ -1,6 +1,7 @@
 import type {
   ActiveProfileMap,
   CliInstallStatus,
+  InstallerSourceConfig,
   L1Rule,
   Locale,
   NodeStatus,
@@ -27,10 +28,17 @@ import {
 import { defaultL1Rules } from "./fixtures/sandbox";
 import { windowsTerminals, noTerminals } from "./fixtures/terminals";
 
+const MOCK_RUNTIME_ROOT = "C:\\Users\\you\\AppData\\Local\\cc-switch\\runtime";
+const MOCK_NODE_PATH = `${MOCK_RUNTIME_ROOT}\\node\\node.exe`;
+const CLAUDE_VERSION = "2.1.150";
+const CODEX_VERSION = "0.133.0";
+
 export interface ScenarioState {
   cliStatus: Record<TargetCli, CliInstallStatus>;
   nodeStatus: NodeStatus;
   gitInstalled: boolean;
+  workdirReady: boolean;
+  workdirPath: string;
   profiles: Profile[];
   activeProfiles: ActiveProfileMap;
   terminals: TerminalCandidate[];
@@ -41,6 +49,7 @@ export interface ScenarioState {
   uiMode: UiMode;
   locale: Locale;
   networkAvailable: boolean;
+  installerSourceConfig: InstallerSourceConfig;
 }
 
 function emptyCliStatus(cli: TargetCli, lastChecked: string): CliInstallStatus {
@@ -58,13 +67,17 @@ function installedCliStatus(
     version,
     path:
       cli === "claude"
-        ? "C:\\Users\\you\\.cc-switch\\runtime\\node_modules\\.bin\\claude.cmd"
-        : "C:\\Users\\you\\.cc-switch\\runtime\\node_modules\\.bin\\codex.cmd",
+        ? `${MOCK_RUNTIME_ROOT}\\claude\\claude.cmd`
+        : `${MOCK_RUNTIME_ROOT}\\codex\\codex.cmd`,
     lastChecked,
   };
 }
 
 const generatedAt = "2026-05-22T10:00:00.000Z";
+
+function defaultInstallerSourceConfig(): InstallerSourceConfig {
+  return {};
+}
 
 function buildNewUser(): ScenarioState {
   resetIdCounter();
@@ -73,8 +86,10 @@ function buildNewUser(): ScenarioState {
       claude: emptyCliStatus("claude", generatedAt),
       codex: emptyCliStatus("codex", generatedAt),
     },
-    nodeStatus: { installed: false, isPrivateRuntime: false },
+    nodeStatus: { installed: false, isPrivateRuntime: true },
     gitInstalled: false,
+    workdirReady: false,
+    workdirPath: "C:\\Users\\you\\cc-launcher-projects",
     profiles: [],
     activeProfiles: { claude: null, codex: null },
     terminals: windowsTerminals(),
@@ -85,6 +100,7 @@ function buildNewUser(): ScenarioState {
     uiMode: "novice",
     locale: "zh",
     networkAvailable: true,
+    installerSourceConfig: defaultInstallerSourceConfig(),
   };
 }
 
@@ -94,17 +110,19 @@ function buildClaudeInstalledCodexMissing(): ScenarioState {
   const codexDefault = defaultProfile("codex");
   return {
     cliStatus: {
-      claude: installedCliStatus("claude", "2.1.148", generatedAt),
+      claude: installedCliStatus("claude", CLAUDE_VERSION, generatedAt),
       codex: emptyCliStatus("codex", generatedAt),
     },
     nodeStatus: {
       installed: true,
       version: "v20.11.0",
-      path: "C:\\Users\\you\\.cc-switch\\runtime\\node\\node.exe",
+      path: MOCK_NODE_PATH,
       isPrivateRuntime: true,
       majorVersion: 20,
     },
     gitInstalled: true,
+    workdirReady: true,
+    workdirPath: "C:\\Users\\you\\cc-launcher-projects",
     profiles: [claudeDefault, codexDefault],
     activeProfiles: {
       claude: claudeDefault.id,
@@ -128,6 +146,7 @@ function buildClaudeInstalledCodexMissing(): ScenarioState {
     uiMode: "novice",
     locale: "zh",
     networkAvailable: true,
+    installerSourceConfig: defaultInstallerSourceConfig(),
   };
 }
 
@@ -135,17 +154,19 @@ function buildAllInstalledNoProfile(): ScenarioState {
   resetIdCounter();
   return {
     cliStatus: {
-      claude: installedCliStatus("claude", "2.1.148", generatedAt),
-      codex: installedCliStatus("codex", "0.133.0", generatedAt),
+      claude: installedCliStatus("claude", CLAUDE_VERSION, generatedAt),
+      codex: installedCliStatus("codex", CODEX_VERSION, generatedAt),
     },
     nodeStatus: {
       installed: true,
       version: "v20.11.0",
-      path: "C:\\Users\\you\\.cc-switch\\runtime\\node\\node.exe",
+      path: MOCK_NODE_PATH,
       isPrivateRuntime: true,
       majorVersion: 20,
     },
     gitInstalled: true,
+    workdirReady: true,
+    workdirPath: "C:\\Users\\you\\cc-launcher-projects",
     profiles: [],
     activeProfiles: { claude: null, codex: null },
     terminals: windowsTerminals(),
@@ -156,6 +177,7 @@ function buildAllInstalledNoProfile(): ScenarioState {
     uiMode: "novice",
     locale: "zh",
     networkAvailable: true,
+    installerSourceConfig: defaultInstallerSourceConfig(),
   };
 }
 
@@ -169,17 +191,19 @@ function buildFullyConfigured(): ScenarioState {
   const codexExp = expProfile("codex");
   return {
     cliStatus: {
-      claude: installedCliStatus("claude", "2.1.148", generatedAt),
-      codex: installedCliStatus("codex", "0.133.0", generatedAt),
+      claude: installedCliStatus("claude", CLAUDE_VERSION, generatedAt),
+      codex: installedCliStatus("codex", CODEX_VERSION, generatedAt),
     },
     nodeStatus: {
       installed: true,
       version: "v20.11.0",
-      path: "C:\\Users\\you\\.cc-switch\\runtime\\node\\node.exe",
+      path: MOCK_NODE_PATH,
       isPrivateRuntime: true,
       majorVersion: 20,
     },
     gitInstalled: true,
+    workdirReady: true,
+    workdirPath: "C:\\Users\\you\\cc-launcher-projects",
     profiles: [
       claudeDefault,
       claudeWork,
@@ -210,6 +234,7 @@ function buildFullyConfigured(): ScenarioState {
     uiMode: "expert",
     locale: "zh",
     networkAvailable: true,
+    installerSourceConfig: defaultInstallerSourceConfig(),
   };
 }
 
@@ -220,8 +245,10 @@ function buildNetworkFailure(): ScenarioState {
       claude: emptyCliStatus("claude", generatedAt),
       codex: emptyCliStatus("codex", generatedAt),
     },
-    nodeStatus: { installed: false, isPrivateRuntime: false },
+    nodeStatus: { installed: false, isPrivateRuntime: true },
     gitInstalled: false,
+    workdirReady: false,
+    workdirPath: "C:\\Users\\you\\cc-launcher-projects",
     profiles: [],
     activeProfiles: { claude: null, codex: null },
     terminals: noTerminals(),
@@ -232,6 +259,7 @@ function buildNetworkFailure(): ScenarioState {
     uiMode: "novice",
     locale: "zh",
     networkAvailable: false,
+    installerSourceConfig: defaultInstallerSourceConfig(),
   };
 }
 

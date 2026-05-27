@@ -1,6 +1,8 @@
 import type { ProbeItem, SystemProbeReport } from "../../contracts";
 
 const baseGenerated = "2026-05-22T10:00:00.000Z";
+const mockRuntimeRoot = "C:\\Users\\you\\AppData\\Local\\cc-switch\\runtime";
+const mockNodePath = `${mockRuntimeRoot}\\node\\node.exe`;
 
 function item(
   p: Partial<ProbeItem> & Pick<ProbeItem, "id" | "group" | "status">,
@@ -28,28 +30,16 @@ export function probeReportNewUser(): SystemProbeReport {
       },
     }),
     item({
-      id: "arch",
-      group: "system",
-      status: "green",
-      value: { arch: "x86_64", bits: 64 },
-    }),
-    item({
       id: "cpu",
       group: "system",
       status: "green",
       value: { physicalCores: 8, brand: "Intel" },
     }),
     item({
-      id: "memoryTotal",
+      id: "memory",
       group: "system",
       status: "green",
-      value: { totalGb: 16 },
-    }),
-    item({
-      id: "memoryAvailable",
-      group: "system",
-      status: "green",
-      value: { availableGb: 9.2, percentFree: 57 },
+      value: { totalGb: 16, availableGb: 9.2, percentFree: 57 },
     }),
     item({
       id: "disk",
@@ -64,7 +54,13 @@ export function probeReportNewUser(): SystemProbeReport {
       value: null,
       fixAction: { kind: "installNode", targetLtsMajor: 20 },
     }),
-    item({ id: "npm", group: "runtime", status: "missing", value: null }),
+    item({
+      id: "npm",
+      group: "runtime",
+      status: "missing",
+      value: null,
+      fixAction: { kind: "installNode", targetLtsMajor: 20 },
+    }),
     item({
       id: "git",
       group: "runtime",
@@ -75,8 +71,13 @@ export function probeReportNewUser(): SystemProbeReport {
     item({
       id: "path",
       group: "runtime",
-      status: "yellow",
-      value: { entries: [], missing: ["npm-global"] },
+      status: "red",
+      value: {
+        entries: [],
+        missing: ["node", "npm", "git"],
+        coveredByPrivateRuntime: [],
+        unresolved: ["node", "npm", "git"],
+      },
     }),
     item({
       id: "network",
@@ -129,10 +130,24 @@ export function probeReportNewUser(): SystemProbeReport {
       },
     }),
     item({
+      id: "workdirExists",
+      group: "workdir",
+      status: "missing",
+      value: { path: "C:\\Users\\you\\cc-launcher-projects", exists: false },
+      fixAction: {
+        kind: "createWorkdir",
+        path: "C:\\Users\\you\\cc-launcher-projects",
+      },
+    }),
+    item({
       id: "workdirWritable",
       group: "workdir",
-      status: "green",
-      value: { path: "C:\\Users\\you\\cc-launcher-projects", writable: true },
+      status: "missing",
+      value: { path: "C:\\Users\\you\\cc-launcher-projects", writable: false },
+      fixAction: {
+        kind: "createWorkdir",
+        path: "C:\\Users\\you\\cc-launcher-projects",
+      },
     }),
   ];
   return {
@@ -156,28 +171,16 @@ export function probeReportFullyConfigured(): SystemProbeReport {
       },
     }),
     item({
-      id: "arch",
-      group: "system",
-      status: "green",
-      value: { arch: "x86_64", bits: 64 },
-    }),
-    item({
       id: "cpu",
       group: "system",
       status: "green",
       value: { physicalCores: 8, brand: "Intel" },
     }),
     item({
-      id: "memoryTotal",
+      id: "memory",
       group: "system",
       status: "green",
-      value: { totalGb: 16 },
-    }),
-    item({
-      id: "memoryAvailable",
-      group: "system",
-      status: "green",
-      value: { availableGb: 9.2, percentFree: 57 },
+      value: { totalGb: 16, availableGb: 9.2, percentFree: 57 },
     }),
     item({
       id: "disk",
@@ -191,14 +194,21 @@ export function probeReportFullyConfigured(): SystemProbeReport {
       status: "green",
       value: {
         version: "v20.11.0",
-        path: "C:\\Users\\you\\.cc-switch\\runtime\\node\\node.exe",
+        path: mockNodePath,
+        isPrivateRuntime: true,
+        majorVersion: 20,
       },
     }),
     item({
       id: "npm",
       group: "runtime",
       status: "green",
-      value: { version: "10.2.4" },
+      value: {
+        version: "10.2.4",
+        path: `${mockRuntimeRoot}\\node\\node_modules\\npm\\bin\\npm-cli.js`,
+        isPrivateRuntime: true,
+        majorVersion: 10,
+      },
     }),
     item({
       id: "git",
@@ -213,7 +223,12 @@ export function probeReportFullyConfigured(): SystemProbeReport {
       id: "path",
       group: "runtime",
       status: "green",
-      value: { entries: ["C:\\Users\\you\\.cc-switch\\runtime"], missing: [] },
+      value: {
+        entries: [],
+        missing: ["node", "npm"],
+        coveredByPrivateRuntime: ["node", "npm"],
+        unresolved: [],
+      },
     }),
     item({
       id: "network",
@@ -266,6 +281,12 @@ export function probeReportFullyConfigured(): SystemProbeReport {
         url: "https://support.apple.com/en-us/HT211861",
         labelKey: "probe.rosetta.docs",
       },
+    }),
+    item({
+      id: "workdirExists",
+      group: "workdir",
+      status: "green",
+      value: { path: "C:\\Users\\you\\cc-launcher-projects", exists: true },
     }),
     item({
       id: "workdirWritable",

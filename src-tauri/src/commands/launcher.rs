@@ -13,8 +13,8 @@ use crate::store::AppState;
 use crate::types::OperationResult;
 
 use super::launcher_wire::{
-    parse_terminal_wire_id, typed_error_from, WireLaunchResult, WireSafetySummary,
-    WireTargetCli, WireTerminalInfo,
+    parse_terminal_wire_id, typed_error_from, WireLaunchResult, WireSafetySummary, WireTargetCli,
+    WireTerminalInfo,
 };
 
 /// Wire form of `StartCliOpts`. Matches the frontend mock signature shape
@@ -72,10 +72,7 @@ pub async fn start_cli(
     // Project the wire opts into the service-layer `StartCliOpts`. The wire
     // shape carries `terminal_id: String`; resolve it to the internal
     // `TerminalKind` via the existing wire-id parser.
-    let preferred_kind = opts
-        .terminal_id
-        .as_deref()
-        .and_then(parse_terminal_wire_id);
+    let preferred_kind = opts.terminal_id.as_deref().and_then(parse_terminal_wire_id);
     // Guard: `profile_id` is required at the wire boundary. The service layer
     // accepts `Option<String>` (active-profile fallback) but the contract
     // always carries an explicit id.

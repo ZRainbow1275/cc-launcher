@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InstallerWizard } from "@/components/installer/InstallerWizard";
-import { installer, renderWithMockIPC, teardownMockIPC } from "@/lib/api/mock";
+import {
+  installer,
+  renderWithMockIPC,
+  settings,
+  teardownMockIPC,
+} from "@/lib/api/mock";
 
 afterEach(() => {
   teardownMockIPC();
@@ -246,5 +251,62 @@ describe("InstallerWizard — install single CLI happy path", () => {
     // verify mock state reflects install
     const status = await installer.detect_cli("codex");
     expect(status.installed).toBe(true);
+  });
+
+  it("saves a private npm registry and uses it for the install stream", async () => {
+    const user = userEvent.setup();
+    renderWithMockIPC(
+      "claude-installed-codex-missing",
+      <InstallerWizard initialStep={4} />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("installer-source-settings"),
+      ).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(
+        (screen.getByTestId("installer-source-save") as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    });
+
+    await user.type(
+      screen.getByTestId("installer-source-npm-registry"),
+      "https://vps.example.com/npm",
+    );
+    await user.click(screen.getByTestId("installer-source-save"));
+
+    await waitFor(async () => {
+      const saved = await settings.get_installer_source_config();
+      expect(saved.npmRegistry).toBe("https://vps.example.com/npm");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("installer-step-4-start")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("installer-step-4-start"));
+    });
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getByTestId("install-progress-codex-registry"),
+        ).toHaveTextContent("https://vps.example.com/npm");
+      },
+      { timeout: 5000 },
+    );
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getByTestId("install-progress-codex-success"),
+        ).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
   });
 });

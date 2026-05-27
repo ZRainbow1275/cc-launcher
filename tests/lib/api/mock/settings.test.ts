@@ -41,3 +41,32 @@ describe("settingsMock.get_locale + set_locale", () => {
     expect(await settingsMock.get_locale()).toBe("ja");
   });
 });
+
+describe("settingsMock installer source config", () => {
+  it("persists and resets custom installer sources", async () => {
+    expect(await settingsMock.get_installer_source_config()).toEqual({});
+
+    await settingsMock.set_installer_source_config({
+      npmRegistry: "https://vps.example.com/npm",
+      nodeDistMirror: "https://vps.example.com/node",
+      gitForWindowsMirror: "https://vps.example.com/git",
+    });
+
+    expect(await settingsMock.get_installer_source_config()).toEqual({
+      npmRegistry: "https://vps.example.com/npm",
+      nodeDistMirror: "https://vps.example.com/node",
+      gitForWindowsMirror: "https://vps.example.com/git",
+    });
+
+    await settingsMock.reset_installer_source_config();
+    expect(await settingsMock.get_installer_source_config()).toEqual({});
+  });
+
+  it("rejects invalid installer source URLs", async () => {
+    await expect(
+      settingsMock.set_installer_source_config({
+        npmRegistry: "not-a-url",
+      } as never),
+    ).rejects.toBeTruthy();
+  });
+});

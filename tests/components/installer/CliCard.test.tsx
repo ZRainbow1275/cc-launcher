@@ -9,8 +9,8 @@ function status(installed: boolean): CliInstallStatus {
     ? {
         cli: "claude",
         installed: true,
-        version: "2.1.148",
-        path: "C:\\Users\\you\\.cc-switch\\runtime\\node_modules\\.bin\\claude.cmd",
+        version: "2.1.150",
+        path: "C:\\Users\\you\\AppData\\Local\\cc-switch\\runtime\\claude\\claude.cmd",
         lastChecked: new Date().toISOString(),
       }
     : {
@@ -37,7 +37,7 @@ describe("CliCard", () => {
       "true",
     );
     expect(screen.getByTestId("cli-card-claude-version").textContent).toBe(
-      "2.1.148",
+      "2.1.150",
     );
     expect(
       screen.getByTestId("cli-card-claude-profile-count"),

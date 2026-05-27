@@ -59,6 +59,8 @@ function fixActionKey(action: FixAction): string {
       return "installGit";
     case "cleanEnvVar":
       return `cleanEnvVar:${action.varName}`;
+    case "createWorkdir":
+      return `createWorkdir:${action.path}`;
     case "openHomeDir":
       return "openHomeDir";
     case "injectPathEntries":
@@ -69,7 +71,9 @@ function fixActionKey(action: FixAction): string {
 }
 
 function isAutoFixable(action: FixAction): boolean {
-  return action.kind !== "externalLink";
+  return !["externalLink", "openHomeDir", "injectPathEntries"].includes(
+    action.kind,
+  );
 }
 
 function statusIcon(status: ProbeStatus): React.ReactNode {
@@ -166,9 +170,15 @@ export function SystemCheckDashboard({
 
   const fixableItems = useMemo<{ item: ProbeItem; action: FixAction }[]>(() => {
     const items = query.data?.items ?? [];
-    return items
-      .filter((it) => it.fixAction && isAutoFixable(it.fixAction))
-      .map((it) => ({ item: it, action: it.fixAction as FixAction }));
+    const seen = new Set<string>();
+    return items.reduce<{ item: ProbeItem; action: FixAction }[]>((acc, it) => {
+      if (!it.fixAction || !isAutoFixable(it.fixAction)) return acc;
+      const key = fixActionKey(it.fixAction);
+      if (seen.has(key)) return acc;
+      seen.add(key);
+      acc.push({ item: it, action: it.fixAction });
+      return acc;
+    }, []);
   }, [query.data]);
 
   const handleReprobe = (): void => {

@@ -626,7 +626,6 @@ function App() {
 
     const setupListener = async () => {
       try {
-        const { listen } = await import("@tauri-apps/api/event");
         const off = await listen("universal-provider-synced", async () => {
           await queryClient.invalidateQueries({ queryKey: ["providers"] });
           try {
@@ -661,24 +660,28 @@ function App() {
 
     const setupListener = async () => {
       try {
-        const off = await listen(
-          "webdav-sync-status-updated",
-          async (event) => {
-            const payload = (event.payload ??
-              {}) as WebDavSyncStatusUpdatedPayload;
-            await queryClient.invalidateQueries({ queryKey: ["settings"] });
+        const off = await listen("webdav-sync-status-updated", (event) => {
+          const payload = (event.payload ??
+            {}) as WebDavSyncStatusUpdatedPayload;
+          void queryClient
+            .invalidateQueries({ queryKey: ["settings"] })
+            .catch((error) => {
+              console.error(
+                "[App] Failed to invalidate settings after WebDAV sync status update",
+                error,
+              );
+            });
 
-            if (payload.source !== "auto" || payload.status !== "error") {
-              return;
-            }
+          if (payload.source !== "auto" || payload.status !== "error") {
+            return;
+          }
 
-            toast.error(
-              t("settings.webdavSync.autoSyncFailedToast", {
-                error: payload.error || t("common.unknown"),
-              }),
-            );
-          },
-        );
+          toast.error(
+            t("settings.webdavSync.autoSyncFailedToast", {
+              error: payload.error || t("common.unknown"),
+            }),
+          );
+        });
         if (!active) {
           off();
           return;

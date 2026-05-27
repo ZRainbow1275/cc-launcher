@@ -218,8 +218,8 @@ fn apply_to_command_impl(cmd: &mut Command, _level: SandboxLevel) -> Result<(), 
     use std::os::unix::process::CommandExt;
 
     // 1) 用当前 cwd 渲染 SBPL profile 文件。若 Command 未显式设 cwd，则使用进程的 cwd。
-    let cwd = std::env::current_dir()
-        .map_err(|e| SandboxError::SandboxExec(format!("read cwd: {e}")))?;
+    let cwd =
+        std::env::current_dir().map_err(|e| SandboxError::SandboxExec(format!("read cwd: {e}")))?;
     let profile_path = sandbox_exec::apply_sandbox_exec_profile(&cwd)
         .map_err(|e| SandboxError::SandboxExec(e.to_string()))?;
 
@@ -228,8 +228,7 @@ fn apply_to_command_impl(cmd: &mut Command, _level: SandboxLevel) -> Result<(), 
     //    Rust 的 std::process::Command 在 macOS 下没有可枚举的现有 argv，
     //    所以我们把 cmd 替换为一个新的 sandbox-exec 命令并保留其余 builder 状态。
     let original_program = cmd.get_program().to_owned();
-    let original_args: Vec<std::ffi::OsString> =
-        cmd.get_args().map(|a| a.to_owned()).collect();
+    let original_args: Vec<std::ffi::OsString> = cmd.get_args().map(|a| a.to_owned()).collect();
 
     // 重置为 sandbox-exec
     *cmd = Command::new("/usr/bin/sandbox-exec");
@@ -287,8 +286,8 @@ fn libc_setsid() -> i64 {
 /// 系统会回收句柄，KILL_ON_JOB_CLOSE 才生效，从而保证子终端不会因为函数返回就被秒杀。
 #[cfg(windows)]
 pub fn assign_to_job_object(pid: u32, _level: SandboxLevel) -> Result<(), SandboxError> {
-    let job = job_object::create_sandbox_job()
-        .map_err(|e| SandboxError::JobObject(e.to_string()))?;
+    let job =
+        job_object::create_sandbox_job().map_err(|e| SandboxError::JobObject(e.to_string()))?;
     job.assign_process(pid)
         .map_err(|e| SandboxError::JobObject(e.to_string()))?;
     // 关键：不要 drop JobHandle，否则 CloseHandle → KILL_ON_JOB_CLOSE 立即杀死 child。

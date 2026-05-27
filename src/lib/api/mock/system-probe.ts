@@ -4,6 +4,8 @@ import { delay, shouldFail } from "./runtime";
 import { getState } from "./scenarios";
 
 const DOMAIN = "system_probe";
+const MOCK_NODE_PATH =
+  "C:\\Users\\you\\AppData\\Local\\cc-switch\\runtime\\node\\node.exe";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -17,6 +19,8 @@ function fixIdFor(action: FixAction): string {
       return "fix-installGit";
     case "cleanEnvVar":
       return `fix-cleanEnvVar-${action.varName}`;
+    case "createWorkdir":
+      return "fix-createWorkdir";
     case "openHomeDir":
       return "fix-openHomeDir";
     case "injectPathEntries":
@@ -38,9 +42,25 @@ function reprobe(): void {
           value: {
             version: state.nodeStatus.version,
             path: state.nodeStatus.path,
+            isPrivateRuntime: true,
+            majorVersion: state.nodeStatus.majorVersion,
           },
           fixAction: null,
           messageKey: "probe.node.green",
+        };
+      }
+      if (it.id === "npm" && state.nodeStatus.installed) {
+        return {
+          ...it,
+          status: "green",
+          value: {
+            version: "10.2.4",
+            path: "C:\\Users\\you\\AppData\\Local\\cc-switch\\runtime\\node\\node_modules\\npm\\bin\\npm-cli.js",
+            isPrivateRuntime: true,
+            majorVersion: 10,
+          },
+          fixAction: null,
+          messageKey: "probe.npm.green",
         };
       }
       if (it.id === "git" && state.gitInstalled) {
@@ -53,6 +73,45 @@ function reprobe(): void {
           },
           fixAction: null,
           messageKey: "probe.git.green",
+        };
+      }
+      if (
+        (it.id === "workdirExists" || it.id === "workdirWritable") &&
+        state.workdirReady
+      ) {
+        return {
+          ...it,
+          status: "green",
+          value:
+            it.id === "workdirExists"
+              ? {
+                  path: state.workdirPath,
+                  exists: true,
+                }
+              : {
+                  path: state.workdirPath,
+                  writable: true,
+                },
+          fixAction: null,
+          messageKey: `probe.${it.id}.green`,
+        };
+      }
+      if (it.id === "path") {
+        const unresolved = state.gitInstalled ? [] : ["git"];
+        return {
+          ...it,
+          status: unresolved.length === 0 ? "green" : "yellow",
+          value: {
+            entries: [],
+            missing: state.gitInstalled
+              ? ["node", "npm"]
+              : ["node", "npm", "git"],
+            coveredByPrivateRuntime: ["node", "npm"],
+            unresolved,
+          },
+          fixAction: null,
+          messageKey:
+            unresolved.length === 0 ? "probe.path.green" : "probe.path.yellow",
         };
       }
       return it;
@@ -121,13 +180,17 @@ export const systemProbeMock = {
           state.nodeStatus = {
             installed: true,
             version: "v20.11.0",
-            path: "C:\\Users\\you\\.cc-switch\\runtime\\node\\node.exe",
+            path: MOCK_NODE_PATH,
             isPrivateRuntime: true,
             majorVersion: action.targetLtsMajor,
           };
           break;
         case "installGit":
           state.gitInstalled = true;
+          break;
+        case "createWorkdir":
+          state.workdirReady = true;
+          state.workdirPath = action.path;
           break;
         case "cleanEnvVar":
         case "openHomeDir":

@@ -31,7 +31,8 @@ use futures::StreamExt;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
-use super::mirrors::{detect_arch, GIT_FOR_WINDOWS_MIRRORS};
+use super::mirrors::detect_arch;
+use super::source_config::{git_for_windows_mirror_chain, InstallerSourceConfig, MirrorEndpoint};
 
 /// Pinned PortableGit version. Bumped manually when a new Git for Windows
 /// stable release ships. Held constant here to keep mirror URL composition
@@ -95,6 +96,13 @@ impl PortableGit {
 
     /// Auto-install PortableGit via the mirror chain.
     pub async fn install() -> Result<(), PortableGitError> {
+        Self::install_with_config(InstallerSourceConfig::default()).await
+    }
+
+    /// Auto-install PortableGit via the configured mirror chain.
+    pub async fn install_with_config(
+        source_config: InstallerSourceConfig,
+    ) -> Result<(), PortableGitError> {
         let arch = portable_git_arch()?;
         let archive_name = format!("PortableGit-{PINNED_VERSION}-{arch}.7z.exe");
 
@@ -111,7 +119,8 @@ impl PortableGit {
         }
 
         // Run the pipeline, cleaning up on failure.
-        let result = Self::run_install_pipeline(&archive_name, &git_dir).await;
+        let mirrors = git_for_windows_mirror_chain(&source_config);
+        let result = Self::run_install_pipeline(&archive_name, &git_dir, &mirrors).await;
         if result.is_err() {
             cleanup_dir(&git_dir);
         }
@@ -121,6 +130,7 @@ impl PortableGit {
     async fn run_install_pipeline(
         archive_name: &str,
         git_dir: &Path,
+        mirrors: &[MirrorEndpoint],
     ) -> Result<(), PortableGitError> {
         let tmp_dir = tempfile::Builder::new()
             .prefix("cc-switch-portable-git-")
@@ -133,16 +143,19 @@ impl PortableGit {
 
         // 1. Walk the mirror chain. First successful download wins.
         let mut last_err: Option<PortableGitError> = None;
-        let mut chosen_mirror: Option<&'static str> = None;
-        for mirror in GIT_FOR_WINDOWS_MIRRORS {
+        let mut chosen_mirror: Option<String> = None;
+        for mirror in mirrors {
             if archive_path.exists() {
                 let _ = std::fs::remove_file(&archive_path);
             }
-            let url = build_archive_url(mirror.name, mirror.base, archive_name);
+            let url = build_archive_url(&mirror.name, &mirror.base, archive_name);
             match download_to(&url, &archive_path).await {
                 Ok(()) => {
-                    log::info!("PortableGit archive downloaded from mirror: {}", mirror.name);
-                    chosen_mirror = Some(mirror.name);
+                    log::info!(
+                        "PortableGit archive downloaded from mirror: {}",
+                        mirror.name
+                    );
+                    chosen_mirror = Some(mirror.name.clone());
                     break;
                 }
                 Err(e) => {
@@ -179,9 +192,13 @@ impl PortableGit {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
-        let output = cmd.output().await.map_err(|e| PortableGitError::Extract(
-            format!("spawn self-extract {}: {}", archive_path.display(), e),
-        ))?;
+        let output = cmd.output().await.map_err(|e| {
+            PortableGitError::Extract(format!(
+                "spawn self-extract {}: {}",
+                archive_path.display(),
+                e
+            ))
+        })?;
         if !output.status.success() {
             return Err(PortableGitError::Extract(format!(
                 "self-extract exited with {:?}; stderr={}",
@@ -205,9 +222,10 @@ impl PortableGit {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             probe.creation_flags(CREATE_NO_WINDOW);
         }
-        let v_out = probe.output().await.map_err(|e| {
-            PortableGitError::Validate(format!("spawn git --version: {e}"))
-        })?;
+        let v_out = probe
+            .output()
+            .await
+            .map_err(|e| PortableGitError::Validate(format!("spawn git --version: {e}")))?;
         if !v_out.status.success() {
             return Err(PortableGitError::Validate(format!(
                 "git --version exited with {:?}",

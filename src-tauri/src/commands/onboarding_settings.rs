@@ -12,6 +12,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
+use crate::services::installer::InstallerSourceConfig;
 use crate::store::AppState;
 use crate::types::{LocalizedString, OperationResult};
 
@@ -20,6 +21,7 @@ const ONBOARDING_COMPLETED_AT_KEY: &str = "cc_launcher.onboarding.completed_at";
 const ONBOARDING_ANSWERS_KEY: &str = "cc_launcher.onboarding.answers";
 const UI_MODE_KEY: &str = "cc_launcher.ui_mode";
 const LOCALE_KEY: &str = "cc_launcher.locale";
+const INSTALLER_SOURCE_CONFIG_KEY: &str = "cc_launcher.installer_source_config";
 
 const DEFAULT_UI_MODE: UiMode = UiMode::Novice;
 const DEFAULT_LOCALE: Locale = Locale::En;
@@ -129,12 +131,13 @@ fn onboarding_complete_internal(
     state.db.set_setting(ONBOARDING_COMPLETED_AT_KEY, &now)?;
 
     if let Some(answers) = answers {
-        let json = serde_json::to_string(&answers).map_err(|e| {
-            AppError::Database(format!("序列化 onboarding answers 失败: {e}"))
-        })?;
+        let json = serde_json::to_string(&answers)
+            .map_err(|e| AppError::Database(format!("序列化 onboarding answers 失败: {e}")))?;
         state.db.set_setting(ONBOARDING_ANSWERS_KEY, &json)?;
         // Mirror locale/ui_mode into their own keys so settings_get_* sees them.
-        state.db.set_setting(UI_MODE_KEY, answers.ui_mode.as_str())?;
+        state
+            .db
+            .set_setting(UI_MODE_KEY, answers.ui_mode.as_str())?;
         state.db.set_setting(LOCALE_KEY, answers.locale.as_str())?;
     }
 
@@ -168,6 +171,40 @@ fn settings_set_locale_internal(
     locale: Locale,
 ) -> Result<OperationResult, AppError> {
     state.db.set_setting(LOCALE_KEY, locale.as_str())?;
+    Ok(OperationResult::ok())
+}
+
+pub(crate) fn settings_get_installer_source_config_internal(
+    state: &AppState,
+) -> Result<InstallerSourceConfig, AppError> {
+    match state.db.get_setting(INSTALLER_SOURCE_CONFIG_KEY)? {
+        Some(json) => {
+            let parsed = serde_json::from_str::<InstallerSourceConfig>(&json).map_err(|e| {
+                AppError::Database(format!("解析 installer source config 失败: {e}"))
+            })?;
+            Ok(parsed)
+        }
+        None => Ok(InstallerSourceConfig::default()),
+    }
+}
+
+fn settings_set_installer_source_config_internal(
+    state: &AppState,
+    config: InstallerSourceConfig,
+) -> Result<OperationResult, AppError> {
+    let validated = config
+        .validated()
+        .map_err(|e| AppError::Database(format!("installer source config 无效: {e}")))?;
+    let json = serde_json::to_string(&validated)
+        .map_err(|e| AppError::Database(format!("序列化 installer source config 失败: {e}")))?;
+    state.db.set_setting(INSTALLER_SOURCE_CONFIG_KEY, &json)?;
+    Ok(OperationResult::ok())
+}
+
+fn settings_reset_installer_source_config_internal(
+    state: &AppState,
+) -> Result<OperationResult, AppError> {
+    state.db.delete_setting(INSTALLER_SOURCE_CONFIG_KEY)?;
     Ok(OperationResult::ok())
 }
 
@@ -213,6 +250,28 @@ pub fn settings_set_locale_test_hook(
 }
 
 #[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn settings_get_installer_source_config_test_hook(
+    state: &AppState,
+) -> Result<InstallerSourceConfig, AppError> {
+    settings_get_installer_source_config_internal(state)
+}
+
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn settings_set_installer_source_config_test_hook(
+    state: &AppState,
+    config: InstallerSourceConfig,
+) -> Result<OperationResult, AppError> {
+    settings_set_installer_source_config_internal(state, config)
+}
+
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn settings_reset_installer_source_config_test_hook(
+    state: &AppState,
+) -> Result<OperationResult, AppError> {
+    settings_reset_installer_source_config_internal(state)
+}
+
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
 pub fn install_git_test_hook() -> Result<OperationResult, AppError> {
     Ok(install_git_stub())
 }
@@ -247,9 +306,7 @@ pub async fn onboarding_complete(
 }
 
 #[tauri::command]
-pub async fn settings_get_ui_mode(
-    state: tauri::State<'_, AppState>,
-) -> Result<UiMode, String> {
+pub async fn settings_get_ui_mode(state: tauri::State<'_, AppState>) -> Result<UiMode, String> {
     settings_get_ui_mode_internal(&state).map_err(|e| e.to_string())
 }
 
@@ -262,9 +319,7 @@ pub async fn settings_set_ui_mode(
 }
 
 #[tauri::command]
-pub async fn settings_get_locale(
-    state: tauri::State<'_, AppState>,
-) -> Result<Locale, String> {
+pub async fn settings_get_locale(state: tauri::State<'_, AppState>) -> Result<Locale, String> {
     settings_get_locale_internal(&state).map_err(|e| e.to_string())
 }
 
@@ -274,6 +329,28 @@ pub async fn settings_set_locale(
     locale: Locale,
 ) -> Result<OperationResult, String> {
     settings_set_locale_internal(&state, locale).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn settings_get_installer_source_config(
+    state: tauri::State<'_, AppState>,
+) -> Result<InstallerSourceConfig, String> {
+    settings_get_installer_source_config_internal(&state).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn settings_set_installer_source_config(
+    state: tauri::State<'_, AppState>,
+    config: InstallerSourceConfig,
+) -> Result<OperationResult, String> {
+    settings_set_installer_source_config_internal(&state, config).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn settings_reset_installer_source_config(
+    state: tauri::State<'_, AppState>,
+) -> Result<OperationResult, String> {
+    settings_reset_installer_source_config_internal(&state).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -338,6 +415,29 @@ mod unit_tests {
             reserialized.get("acceptedRedlines"),
             payload.get("acceptedRedlines"),
         );
-        assert_eq!(reserialized.get("preferredCli"), payload.get("preferredCli"));
+        assert_eq!(
+            reserialized.get("preferredCli"),
+            payload.get("preferredCli")
+        );
+    }
+
+    #[test]
+    fn installer_source_config_round_trip() {
+        let payload = serde_json::json!({
+            "npmRegistry": "https://vps.example.com/npm",
+            "nodeDistMirror": "https://vps.example.com/node",
+            "gitForWindowsMirror": "https://vps.example.com/git",
+        });
+        let parsed: InstallerSourceConfig = serde_json::from_value(payload.clone()).unwrap();
+        assert_eq!(
+            parsed.npm_registry.as_deref(),
+            Some("https://vps.example.com/npm")
+        );
+        let reserialized = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(reserialized.get("npmRegistry"), payload.get("npmRegistry"));
+        assert_eq!(
+            reserialized.get("nodeDistMirror"),
+            payload.get("nodeDistMirror")
+        );
     }
 }

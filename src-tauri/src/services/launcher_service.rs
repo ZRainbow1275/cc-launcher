@@ -26,6 +26,7 @@
 //!   `event_type = "sandbox_spawn"` containing cli, profile_id, terminal, flags, workdir.
 
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -201,13 +202,11 @@ impl LauncherService {
                 cli: cli_name(opts.cli).to_string(),
             });
         }
-        let cli_bin = cli_status
-            .path
-            .as_ref()
-            .map(PathBuf::from)
-            .ok_or_else(|| LauncherError::CliMissing {
+        let cli_bin = cli_status.path.as_ref().map(PathBuf::from).ok_or_else(|| {
+            LauncherError::CliMissing {
                 cli: cli_name(opts.cli).to_string(),
-            })?;
+            }
+        })?;
 
         // 4) Pick terminal.
         let candidates = detect_terminals_impl();
@@ -259,11 +258,19 @@ impl LauncherService {
             &l1_unlocked,
         );
 
-        // 8) Compute env from profile.
-        let env_pairs = compute_env(&profile, &workdir, opts.cli);
+        // 8) Compute env from profile, then prepend private runtime PATH.
+        let mut env_pairs = compute_env(&profile, &workdir, opts.cli);
+        let runtime_path_entries = runtime_path_entries(opts.cli)?;
+        prepend_runtime_path_env(&mut env_pairs, &runtime_path_entries)?;
+        let runtime_path_prefix = join_path_entries(&runtime_path_entries)?;
 
         // 9) Build OS-native terminal wrapper command.
-        let mut term_cmd = build_terminal_command(&chosen.kind, &workdir, &assembled.cmdline);
+        let mut term_cmd = build_terminal_command(
+            &chosen.kind,
+            &workdir,
+            &assembled.cmdline,
+            Some(&runtime_path_prefix),
+        );
 
         // Apply env to the outer terminal command — env vars propagate to the launched CLI.
         for (k, v) in &env_pairs {
@@ -361,9 +368,11 @@ impl LauncherService {
             Ok(p) => p,
             Err(_) => PathBuf::from(cli_name(cli)),
         };
-        let assembled =
-            assemble_cli_command(cli, &cli_bin, &workdir, &profile, &[], &l1_unlocked);
-        let env_pairs = compute_env(&profile, &workdir, cli);
+        let assembled = assemble_cli_command(cli, &cli_bin, &workdir, &profile, &[], &l1_unlocked);
+        let mut env_pairs = compute_env(&profile, &workdir, cli);
+        if let Ok(entries) = runtime_path_entries(cli) {
+            let _ = prepend_runtime_path_env(&mut env_pairs, &entries);
+        }
 
         Ok(SafetySummary {
             sandbox_level: sandbox_level_to_marker(sandbox_level).to_string(),
@@ -634,9 +643,7 @@ fn assemble_cli_command(
             flags.push(format!("--cd {}", workdir.display()));
 
             // Same dead-by-design path for Codex YOLO.
-            if profile_opt_bool(profile, "codex_yolo")
-                && l1_unlocked.contains("L1.codex_yolo")
-            {
+            if profile_opt_bool(profile, "codex_yolo") && l1_unlocked.contains("L1.codex_yolo") {
                 argv.push("--dangerously-bypass-approvals-and-sandbox".into());
                 flags.push("--dangerously-bypass-approvals-and-sandbox".into());
             }
@@ -692,34 +699,116 @@ fn compute_env(profile: &Profile, workdir: &Path, cli: TargetCli) -> Vec<(String
     env
 }
 
+fn runtime_path_entries(cli: TargetCli) -> Result<Vec<PathBuf>, LauncherError> {
+    let cli_bin_dir = CliInstaller::cli_bin_dir(cli).map_err(|e| LauncherError::SpawnFailed {
+        message: format!("resolve CLI bin dir: {e}"),
+    })?;
+    let node_bin_dir = NodeRuntime::node_bin_dir().map_err(|e| LauncherError::SpawnFailed {
+        message: format!("resolve private Node bin dir: {e}"),
+    })?;
+    Ok(vec![cli_bin_dir, node_bin_dir])
+}
+
+fn prepend_runtime_path_env(
+    env_pairs: &mut Vec<(String, String)>,
+    entries: &[PathBuf],
+) -> Result<(), LauncherError> {
+    let override_path = env_pairs
+        .iter()
+        .rev()
+        .find(|(key, _)| is_path_env_key(key))
+        .map(|(_, value)| OsString::from(value));
+
+    env_pairs.retain(|(key, _)| !is_path_env_key(key));
+
+    let mut paths = entries.to_vec();
+    let base_path = override_path
+        .or_else(|| std::env::var_os(path_env_key()))
+        .or_else(|| std::env::var_os("PATH"));
+    if let Some(base) = base_path {
+        paths.extend(std::env::split_paths(&base));
+    }
+
+    let joined = std::env::join_paths(paths.iter().map(|p| p.as_os_str())).map_err(|e| {
+        LauncherError::SpawnFailed {
+            message: format!("compose private runtime PATH: {e}"),
+        }
+    })?;
+    env_pairs.push((
+        path_env_key().to_string(),
+        joined.to_string_lossy().into_owned(),
+    ));
+    Ok(())
+}
+
+fn join_path_entries(entries: &[PathBuf]) -> Result<String, LauncherError> {
+    let joined = std::env::join_paths(entries.iter().map(|p| p.as_os_str())).map_err(|e| {
+        LauncherError::SpawnFailed {
+            message: format!("compose private runtime PATH prefix: {e}"),
+        }
+    })?;
+    Ok(joined.to_string_lossy().into_owned())
+}
+
+fn path_env_key() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "Path"
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        "PATH"
+    }
+}
+
+fn is_path_env_key(key: &str) -> bool {
+    key.eq_ignore_ascii_case("PATH")
+}
+
 // ----------------------------------------------------------------------------
 // Terminal wrapper command builders — strict OS-native argv (no shell concatenation).
 // ----------------------------------------------------------------------------
 
-fn build_terminal_command(kind: &TerminalKind, workdir: &Path, cli_argv: &[String]) -> Command {
+fn build_terminal_command(
+    kind: &TerminalKind,
+    workdir: &Path,
+    cli_argv: &[String],
+    path_prefix: Option<&str>,
+) -> Command {
     match kind {
         TerminalKind::WindowsTerminal => {
-            // wt.exe new-tab --title "<t>" --startingDirectory "<wd>" -- <argv...>
+            // wt.exe new-tab --title "<t>" --startingDirectory "<wd>" -- cmd.exe /K "<script>"
+            //
+            // The extra cmd.exe hop is intentional: when an existing Windows
+            // Terminal server owns the new tab, process-level env passed to
+            // wt.exe may not become the tab shell env. Setting PATH inside the
+            // shell makes the private Node/CLI runtime visible on blank hosts.
             let mut cmd = Command::new("wt.exe");
             cmd.arg("new-tab")
                 .arg("--title")
                 .arg(format!("cc-launcher: {}", first_arg_basename(cli_argv)))
                 .arg("--startingDirectory")
                 .arg(workdir)
-                .arg("--");
-            for a in cli_argv {
-                cmd.arg(a);
-            }
+                .arg("--")
+                .arg("cmd.exe")
+                .arg("/K")
+                .arg(windows_cmd_script(workdir, cli_argv, path_prefix));
             cmd
         }
         TerminalKind::PowerShell => {
             // powershell -NoLogo -NoExit -Command "Set-Location -LiteralPath <wd>; & '<bin>' <args>"
             let bin = pwsh_quote(cli_argv.first().map(String::as_str).unwrap_or(""));
-            let mut script = format!(
+            let mut script = String::new();
+            if let Some(prefix) = path_prefix {
+                script.push_str("$env:Path = ");
+                script.push_str(&pwsh_quote(prefix));
+                script.push_str(" + [System.IO.Path]::PathSeparator + $env:Path; ");
+            }
+            script.push_str(&format!(
                 "Set-Location -LiteralPath {}; & {}",
                 pwsh_quote(&workdir.display().to_string()),
                 bin
-            );
+            ));
             for arg in cli_argv.iter().skip(1) {
                 script.push(' ');
                 script.push_str(&pwsh_quote(arg));
@@ -733,22 +822,14 @@ fn build_terminal_command(kind: &TerminalKind, workdir: &Path, cli_argv: &[Strin
         }
         TerminalKind::Cmd => {
             // cmd.exe /K "cd /D <wd> && <bin> <args...>"
-            let mut script = String::from("cd /D ");
-            script.push_str(&cmd_quote(&workdir.display().to_string()));
-            script.push_str(" && ");
-            for (i, a) in cli_argv.iter().enumerate() {
-                if i > 0 {
-                    script.push(' ');
-                }
-                script.push_str(&cmd_quote(a));
-            }
             let mut cmd = Command::new("cmd.exe");
-            cmd.arg("/K").arg(script);
+            cmd.arg("/K")
+                .arg(windows_cmd_script(workdir, cli_argv, path_prefix));
             cmd
         }
         TerminalKind::MacTerminal => {
             // osascript -e 'tell application "Terminal" to do script "cd <wd>; <bin> <args>"'
-            let inner = osa_inner_script(workdir, cli_argv);
+            let inner = osa_inner_script(workdir, cli_argv, path_prefix);
             let mut cmd = Command::new("osascript");
             cmd.arg("-e").arg(format!(
                 "tell application \"Terminal\" to do script \"{}\"",
@@ -757,7 +838,7 @@ fn build_terminal_command(kind: &TerminalKind, workdir: &Path, cli_argv: &[Strin
             cmd
         }
         TerminalKind::ITerm2 => {
-            let inner = osa_inner_script(workdir, cli_argv);
+            let inner = osa_inner_script(workdir, cli_argv, path_prefix);
             let mut cmd = Command::new("osascript");
             cmd.arg("-e").arg(format!(
                 "tell application \"iTerm\"\n create window with default profile command \"{}\"\nend tell",
@@ -772,7 +853,7 @@ fn build_terminal_command(kind: &TerminalKind, workdir: &Path, cli_argv: &[Strin
                 .arg("--")
                 .arg("bash")
                 .arg("-c")
-                .arg(bash_payload(cli_argv));
+                .arg(bash_payload(cli_argv, path_prefix));
             cmd
         }
         TerminalKind::Konsole => {
@@ -782,7 +863,7 @@ fn build_terminal_command(kind: &TerminalKind, workdir: &Path, cli_argv: &[Strin
                 .arg("-e")
                 .arg("bash")
                 .arg("-c")
-                .arg(bash_payload(cli_argv));
+                .arg(bash_payload(cli_argv, path_prefix));
             cmd
         }
         TerminalKind::Xterm => {
@@ -790,7 +871,7 @@ fn build_terminal_command(kind: &TerminalKind, workdir: &Path, cli_argv: &[Strin
             cmd.arg("-e").arg("bash").arg("-c").arg(format!(
                 "cd {} && {}",
                 bash_single_quote(&workdir.display().to_string()),
-                bash_payload(cli_argv)
+                bash_payload(cli_argv, path_prefix)
             ));
             cmd
         }
@@ -798,8 +879,13 @@ fn build_terminal_command(kind: &TerminalKind, workdir: &Path, cli_argv: &[Strin
 }
 
 /// Build the bash payload string. argv joined with bash single-quote escaping.
-fn bash_payload(cli_argv: &[String]) -> String {
+fn bash_payload(cli_argv: &[String], path_prefix: Option<&str>) -> String {
     let mut out = String::new();
+    if let Some(prefix) = path_prefix {
+        out.push_str("export PATH=");
+        out.push_str(&bash_single_quote(prefix));
+        out.push_str(":$PATH; ");
+    }
     for (i, a) in cli_argv.iter().enumerate() {
         if i > 0 {
             out.push(' ');
@@ -840,6 +926,25 @@ fn pwsh_quote(s: &str) -> String {
     out
 }
 
+fn windows_cmd_script(workdir: &Path, cli_argv: &[String], path_prefix: Option<&str>) -> String {
+    let mut script = String::new();
+    if let Some(prefix) = path_prefix {
+        script.push_str("set \"PATH=");
+        script.push_str(&cmd_escape_env_value(prefix));
+        script.push_str(";%PATH%\" && ");
+    }
+    script.push_str("cd /D ");
+    script.push_str(&cmd_quote(&workdir.display().to_string()));
+    script.push_str(" && ");
+    for (i, a) in cli_argv.iter().enumerate() {
+        if i > 0 {
+            script.push(' ');
+        }
+        script.push_str(&cmd_quote(a));
+    }
+    script
+}
+
 fn cmd_quote(s: &str) -> String {
     // CMD: wrap in double quotes; escape embedded " as "" (no shell metas allowed past
     // is_arg_safe gate).
@@ -856,10 +961,31 @@ fn cmd_quote(s: &str) -> String {
     out
 }
 
+fn cmd_escape_env_value(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '%' => out.push_str("%%"),
+            '"' => out.push_str("\"\""),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
 /// Build the inner double-quoted AppleScript string. Embedded " is doubled-escaped per
 /// AppleScript convention (`\"`).
-fn osa_inner_script(workdir: &Path, cli_argv: &[String]) -> String {
-    let mut inner = format!("cd {}; ", bash_single_quote(&workdir.display().to_string()));
+fn osa_inner_script(workdir: &Path, cli_argv: &[String], path_prefix: Option<&str>) -> String {
+    let mut inner = String::new();
+    if let Some(prefix) = path_prefix {
+        inner.push_str("export PATH=");
+        inner.push_str(&bash_single_quote(prefix));
+        inner.push_str(":$PATH; ");
+    }
+    inner.push_str(&format!(
+        "cd {}; ",
+        bash_single_quote(&workdir.display().to_string())
+    ));
     for (i, a) in cli_argv.iter().enumerate() {
         if i > 0 {
             inner.push(' ');
@@ -1061,6 +1187,89 @@ mod tests {
     fn cmd_quote_doubles_double_quotes() {
         assert_eq!(cmd_quote("foo"), "\"foo\"");
         assert_eq!(cmd_quote("a\"b"), "\"a\"\"b\"");
+    }
+
+    #[test]
+    fn cmd_escape_env_value_escapes_percent_and_quote() {
+        assert_eq!(cmd_escape_env_value("A%B\"C"), "A%%B\"\"C");
+    }
+
+    #[test]
+    fn windows_cmd_script_prepends_private_path_prefix() {
+        let script = windows_cmd_script(
+            Path::new("C:/Users/test/cc-launcher-projects/default"),
+            &["C:/runtime/claude/claude.cmd".into(), "--model".into()],
+            Some("C:/runtime/claude;C:/runtime/node"),
+        );
+
+        assert!(script.starts_with("set \"PATH=C:/runtime/claude;C:/runtime/node;%PATH%\" && "));
+        assert!(script.contains("cd /D \"C:/Users/test/cc-launcher-projects/default\""));
+        assert!(script.contains("\"C:/runtime/claude/claude.cmd\" \"--model\""));
+    }
+
+    #[test]
+    fn windows_terminal_wraps_cli_in_cmd_shell_for_path_injection() {
+        let cmd = build_terminal_command(
+            &TerminalKind::WindowsTerminal,
+            Path::new("C:/Users/test/work"),
+            &["C:/runtime/codex/codex.cmd".into()],
+            Some("C:/runtime/codex;C:/runtime/node"),
+        );
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(cmd.get_program().to_string_lossy(), "wt.exe");
+        assert!(args.iter().any(|arg| arg == "cmd.exe"));
+        assert!(args.iter().any(|arg| arg == "/K"));
+        let script = args.last().expect("script arg");
+        assert!(script.contains("set \"PATH=C:/runtime/codex;C:/runtime/node;%PATH%\""));
+        assert!(script.contains("\"C:/runtime/codex/codex.cmd\""));
+    }
+
+    #[test]
+    fn bash_payload_prepends_private_path_prefix() {
+        let payload = bash_payload(
+            &["/tmp/cli".to_string()],
+            Some("/private/cli:/private/node"),
+        );
+        assert!(payload.starts_with("export PATH='/private/cli:/private/node':$PATH; "));
+        assert!(payload.contains("'/tmp/cli'"));
+    }
+
+    #[test]
+    fn macos_osa_inner_script_prepends_private_path_prefix() {
+        let script = osa_inner_script(
+            Path::new("/Users/test/cc-launcher-projects/default"),
+            &["/private/cli/claude".to_string(), "--model".to_string()],
+            Some("/private/cli:/private/node"),
+        );
+
+        assert!(script.starts_with("export PATH='/private/cli:/private/node':$PATH; "));
+        assert!(script.contains("cd '/Users/test/cc-launcher-projects/default'; "));
+        assert!(script.contains("'/private/cli/claude' '--model'"));
+    }
+
+    #[test]
+    fn prepend_runtime_path_env_keeps_existing_path_after_private_entries() {
+        let mut env_pairs = vec![("PATH".to_string(), "host-bin".to_string())];
+        let entries = vec![PathBuf::from("private-cli"), PathBuf::from("private-node")];
+        prepend_runtime_path_env(&mut env_pairs, &entries).expect("path env composed");
+
+        let (_, value) = env_pairs
+            .iter()
+            .find(|(key, _)| is_path_env_key(key))
+            .expect("PATH env exists");
+        let split: Vec<String> = std::env::split_paths(&OsString::from(value))
+            .map(|p| p.display().to_string())
+            .collect();
+        assert_eq!(split[0], PathBuf::from("private-cli").display().to_string());
+        assert_eq!(
+            split[1],
+            PathBuf::from("private-node").display().to_string()
+        );
+        assert_eq!(split[2], PathBuf::from("host-bin").display().to_string());
     }
 
     #[test]

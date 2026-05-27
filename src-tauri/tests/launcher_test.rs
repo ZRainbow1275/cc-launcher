@@ -13,8 +13,8 @@
 // deadlock risk — only one task runs at a time inside each test.
 #![allow(clippy::await_holding_lock)]
 
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use cc_switch_lib::sandbox::{self, SandboxLevel, APPLY_TO_COMMAND_CALL_COUNT};
 use cc_switch_lib::services::installer::cli_install::TargetCli;
@@ -32,9 +32,13 @@ mod support;
 
 #[test]
 fn is_arg_safe_rejects_dangerous_flags() {
-    assert!(!launcher_service::is_arg_safe("--dangerously-skip-permissions"));
+    assert!(!launcher_service::is_arg_safe(
+        "--dangerously-skip-permissions"
+    ));
     assert!(!launcher_service::is_arg_safe("--yolo"));
-    assert!(!launcher_service::is_arg_safe("--dangerously-bypass-approvals-and-sandbox"));
+    assert!(!launcher_service::is_arg_safe(
+        "--dangerously-bypass-approvals-and-sandbox"
+    ));
     assert!(!launcher_service::is_arg_safe("--skip-permissions"));
     assert!(!launcher_service::is_arg_safe("--bypass-foo"));
 }
@@ -167,7 +171,10 @@ async fn get_safety_summary_always_reports_redlines_active() {
     );
     // Default Claude flags include --add-dir for the workdir.
     assert!(
-        summary.flags_applied.iter().any(|f| f.starts_with("--add-dir")),
+        summary
+            .flags_applied
+            .iter()
+            .any(|f| f.starts_with("--add-dir")),
         "Claude safety summary must include --add-dir flag, got: {:?}",
         summary.flags_applied
     );
@@ -299,13 +306,10 @@ async fn safety_summary_includes_workdir_in_add_dir_flag() {
     )
     .expect("create profile");
 
-    let summary = LauncherService::get_safety_summary(
-        db.clone(),
-        TargetCli::Claude,
-        Some(&created.id),
-    )
-    .await
-    .expect("summary for explicit profile");
+    let summary =
+        LauncherService::get_safety_summary(db.clone(), TargetCli::Claude, Some(&created.id))
+            .await
+            .expect("summary for explicit profile");
 
     let workdir_str = summary.workdir.to_string_lossy().to_string();
     assert!(

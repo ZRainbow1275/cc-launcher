@@ -44,8 +44,8 @@
   },
   "firstRunNotice": {
     "title": "Welcome to CC Launcher",
-    "bodyDefault": "CC Switch lets you switch between multiple Claude Code / Codex / Gemini CLI providers with a single click. If you already had these tools configured, CC Switch has saved your existing setup as a provider named “default” so none of your previous configuration is lost.",
-    "bodyOfficial": "An “Official” preset is also included in the list — click it any time you want to switch back to the official default. CC Switch automatically backs up your current config to “default” before switching, so you can move back and forth freely. That's how CC Switch works 😊",
+    "bodyDefault": "CC Launcher lets you switch between multiple Claude Code / Codex / Gemini CLI providers with a single click. If you already had these tools configured, CC Launcher has saved your existing setup as a provider named “default” so none of your previous configuration is lost.",
+    "bodyOfficial": "An “Official” preset is also included in the list — click it any time you want to switch back to the official default. CC Launcher automatically backs up your current config to “default” before switching, so you can move back and forth freely. That's how CC Launcher works 😊",
     "confirm": "Got it"
   },
   "apiKeyInput": {
@@ -190,7 +190,7 @@
     "modelMappingOffHint": "If your provider does not offer native Claude series models, please enable this switch.",
     "modelMappingOnHint": "Claude Desktop currently restricts model IDs. If your provider offers non-Claude models, enable this switch and keep local routing running while in use.",
     "routeMapTitle": "Model mapping",
-    "routeMapHint": "Choose a model role and CC Switch will generate a Claude Desktop-compatible route automatically. Use the menu display name for branded models such as DeepSeek or Kimi; requested model IDs are sent upstream exactly as entered.",
+    "routeMapHint": "Choose a model role and CC Launcher will generate a Claude Desktop-compatible route automatically. Use the menu display name for branded models such as DeepSeek or Kimi; requested model IDs are sent upstream exactly as entered.",
     "routeModelLabel": "Model role",
     "routeRoleSonnet": "Sonnet",
     "routeRoleOpus": "Opus",
@@ -226,7 +226,7 @@
     "providerDeleted": "Provider deleted successfully",
     "switchSuccess": "Switch successful!",
     "claudeDesktopRestartRequired": "Switched successfully. Restart Claude Desktop to apply changes.",
-    "claudeDesktopProxyRestartRequired": "Switched successfully. Keep CC Switch running and restart Claude Desktop to apply changes.",
+    "claudeDesktopProxyRestartRequired": "Switched successfully. Keep CC Launcher running and restart Claude Desktop to apply changes.",
     "addToConfigSuccess": "Added to config",
     "removeFromConfigSuccess": "Removed from config",
     "switchFailedTitle": "Switch failed",
@@ -267,7 +267,7 @@
     "deleteProvider": "Delete Provider",
     "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"? This action cannot be undone.",
     "removeProvider": "Remove Provider",
-    "removeProviderMessage": "Are you sure you want to remove provider \"{{name}}\" from the configuration?\n\nAfter removal, this provider will no longer be active, but the configuration data will be retained in CC Switch. You can re-add it at any time.",
+    "removeProviderMessage": "Are you sure you want to remove provider \"{{name}}\" from the configuration?\n\nAfter removal, this provider will no longer be active, but the configuration data will be retained in CC Launcher. You can re-add it at any time.",
     "proxy": {
       "title": "Enable Local Routing",
       "message": "Local routing is an advanced feature. Please make sure you understand how it works before enabling.\n\nWe recommend consulting the relevant documentation or your provider for proper configuration.",
@@ -361,7 +361,7 @@
       },
       "globalProxy": {
         "title": "Global Outbound Proxy",
-        "description": "Configure proxy for CC Switch to access external APIs"
+        "description": "Configure proxy for CC Launcher to access external APIs"
       },
       "data": {
         "title": "Data Management",
@@ -431,7 +431,7 @@
     "themeDark": "Dark",
     "themeSystem": "System",
     "importExport": "SQL Import/Export",
-    "importExportHint": "Import or export database SQL backups for migration or restore (import supports only backups exported by CC Switch).",
+    "importExportHint": "Import or export database SQL backups for migration or restore (import supports only backups exported by CC Launcher).",
     "exportConfig": "Export SQL Backup",
     "selectConfigFile": "Select SQL File",
     "noFileSelected": "No configuration file selected.",
@@ -567,7 +567,7 @@
     "windowBehavior": "Window Behavior",
     "windowBehaviorHint": "Configure window minimize and Claude plugin integration policies.",
     "launchOnStartup": "Launch on Startup",
-    "launchOnStartupDescription": "Automatically run CC Switch when system starts",
+    "launchOnStartupDescription": "Automatically run CC Launcher when system starts",
     "silentStartup": "Silent Startup",
     "silentStartupDescription": "Start in background mode without showing main window",
     "autoLaunchFailed": "Failed to set auto-launch",
@@ -589,8 +589,8 @@
     },
     "skillStorage": {
       "title": "Skill Storage Location",
-      "description": "Choose where CC Switch stores the master copies of your skills",
-      "ccSwitch": "CC Switch",
+      "description": "Choose where CC Launcher stores the master copies of your skills",
+      "ccSwitch": "CC Launcher",
       "unified": "~/.agents/skills",
       "ccSwitchHint": "Skills are stored in ~/.cc-switch/skills/ and synced to each app via symlink or copy.",
       "unifiedHint": "Skills are stored in ~/.agents/skills/, the Agent Skills open standard. Compatible tools (Claude Code, Codex, Gemini CLI, etc.) discover skills here natively.",
@@ -638,8 +638,8 @@
     },
     "configDirectoryOverride": "Configuration Directory Override (Advanced)",
     "configDirectoryDescription": "When using Claude Code or Codex in environments like WSL, you can manually specify the configuration directory to the one in WSL to keep provider data consistent with the main environment.",
-    "appConfigDir": "CC Switch Configuration Directory",
-    "appConfigDirDescription": "Customize the storage location for CC Switch configuration (point to cloud sync folder to enable config sync)",
+    "appConfigDir": "CC Launcher Configuration Directory",
+    "appConfigDirDescription": "Customize the storage location for CC Launcher configuration (point to cloud sync folder to enable config sync)",
     "browsePlaceholderApp": "e.g., C:\\Users\\Administrator\\.cc-switch",
     "claudeConfigDir": "Claude Code Configuration Directory",
     "claudeConfigDirDescription": "Override Claude configuration directory (settings.json) and keep claude.json (MCP) alongside it.",
@@ -694,7 +694,7 @@
     "importFailedError": "Import config failed: {{message}}",
     "exportFailedError": "Export config failed:",
     "restartRequired": "Restart Required",
-    "restartRequiredMessage": "Modifying the CC Switch configuration directory requires restarting the application to take effect. Restart now?",
+    "restartRequiredMessage": "Modifying the CC Launcher configuration directory requires restarting the application to take effect. Restart now?",
     "restartNow": "Restart Now",
     "restartLater": "Restart Later",
     "restartFailed": "Application restart failed, please manually close and reopen.",
@@ -1034,29 +1034,29 @@
     "officialHint": "💡 Official provider uses browser login, no API Key needed",
     "getApiKey": "Get API Key",
     "partnerPromotion": {
-      "packycode": "PackyCode is an official partner of CC Switch. Register using this link and enter \"cc-switch\" promo code during recharge to get 10% off",
-      "patewayai": "PatewayAI offers special benefits for CC Switch users. Register via this link to receive $3 credit.",
-      "claudeapi": "ClaudeAPI offers special benefits for CC Switch users. Register via this link to claim test credits.",
+      "packycode": "PackyCode is an official partner of CC Launcher. Register using this link and enter \"cc-switch\" promo code during recharge to get 10% off",
+      "patewayai": "PatewayAI offers special benefits for CC Launcher users. Register via this link to receive $3 credit.",
+      "claudeapi": "ClaudeAPI offers special benefits for CC Launcher users. Register via this link to claim test credits.",
       "claudecn": "ClaudeCN is an enterprise-grade AI gateway operated by a registered company, supporting enterprise procurement processes with corporate payments, contracts, and compliance guarantees.",
-      "runapi": "RunAPI offers special benefits for CC Switch users. Register via this link and contact customer support to claim ¥14 free credit.",
+      "runapi": "RunAPI offers special benefits for CC Launcher users. Register via this link and contact customer support to claim ¥14 free credit.",
       "minimax_cn": "MiniMax Coding Plan Special Offer, Starter from ¥9.9",
       "minimax_en": "MiniMax Coding Plan Black Friday, Starter is now $2/mo (80% OFF!)",
       "dmxapi": "Claude Code exclusive model 66% OFF now!",
-      "cubence": "Cubence is an official partner of CC Switch. Register using this link and enter \"CCSWITCH\" promo code during recharge to get 10% off every top-up",
-      "aigocode": "AIGoCode is an official partner of CC Switch. Register using this link and get 10% bonus credit on your first top-up!",
-      "rightcode": "RightCode is an official partner of CC Switch. Register using this link and get 5% bonus credit on every top-up!",
-      "aicodemirror": "AICodeMirror is an official partner of CC Switch. Register using this link to get 20% off!",
-      "aicoding": "AI Coding offers an exclusive discount for CC Switch users — 10% off your first top-up!",
-      "crazyrouter": "CrazyRouter offers an exclusive bonus for CC Switch users — 30% extra credit on your first top-up!",
-      "sssaicode": "SSAI Code offers an exclusive bonus for CC Switch users — $10 extra credit on every top-up!",
-      "siliconflow": "SiliconFlow is an official partner of CC Switch",
-      "ucloud": "Compshare offers an exclusive bonus for CC Switch users — register via this link to get ¥5 platform trial credit!",
-      "micu": "Micu is an official partner of CC Switch",
+      "cubence": "Cubence is an official partner of CC Launcher. Register using this link and enter \"CCSWITCH\" promo code during recharge to get 10% off every top-up",
+      "aigocode": "AIGoCode is an official partner of CC Launcher. Register using this link and get 10% bonus credit on your first top-up!",
+      "rightcode": "RightCode is an official partner of CC Launcher. Register using this link and get 5% bonus credit on every top-up!",
+      "aicodemirror": "AICodeMirror is an official partner of CC Launcher. Register using this link to get 20% off!",
+      "aicoding": "AI Coding offers an exclusive discount for CC Launcher users — 10% off your first top-up!",
+      "crazyrouter": "CrazyRouter offers an exclusive bonus for CC Launcher users — 30% extra credit on your first top-up!",
+      "sssaicode": "SSAI Code offers an exclusive bonus for CC Launcher users — $10 extra credit on every top-up!",
+      "siliconflow": "SiliconFlow is an official partner of CC Launcher",
+      "ucloud": "Compshare offers an exclusive bonus for CC Launcher users — register via this link to get ¥5 platform trial credit!",
+      "micu": "Micu is an official partner of CC Launcher",
       "ctok": "Join the CTok community on the official website and subscribe to a plan.",
-      "shengsuanyun": "Shengsuanyun offers exclusive benefits for CC Switch users. New users who register via this link get ¥10 free credits and 10% bonus on first top-up!",
-      "lemondata": "Lemon Code offers a special promotion for CC Switch users. Sign up via this link to receive $1 in free credits.",
-      "doubaoseed": "DouBao offers exclusive benefits for CC Switch users: register via this link to get 500K tokens of inference credits for all DouBao text models and 5M tokens of free Seedance 2.0 credits.",
-      "volcengine_agentplan": "Volcengine Ark Agent Plan offers exclusive benefits for CC Switch users: subscribe via this link, starting from ¥40/month for new customers.",
+      "shengsuanyun": "Shengsuanyun offers exclusive benefits for CC Launcher users. New users who register via this link get ¥10 free credits and 10% bonus on first top-up!",
+      "lemondata": "Lemon Code offers a special promotion for CC Launcher users. Sign up via this link to receive $1 in free credits.",
+      "doubaoseed": "DouBao offers exclusive benefits for CC Launcher users: register via this link to get 500K tokens of inference credits for all DouBao text models and 5M tokens of free Seedance 2.0 credits.",
+      "volcengine_agentplan": "Volcengine Ark Agent Plan offers exclusive benefits for CC Launcher users: subscribe via this link, starting from ¥40/month for new customers.",
       "byteplus": "Register via this link to get 500,000 tokens of free inference quota per model."
     },
     "presets": {
@@ -1602,7 +1602,7 @@
       "deleteConfirm": "Are you sure you want to delete server \"{{id}}\"? This action cannot be undone.",
       "noServers": "No servers yet",
       "enabledApps": "Enabled Apps",
-      "noImportFound": "No MCP servers to import found. All servers are already managed by CC Switch.",
+      "noImportFound": "No MCP servers to import found. All servers are already managed by CC Launcher.",
       "importSuccess": "Successfully imported {{count}} MCP servers",
       "apps": {
         "claude": "Claude",
@@ -2147,10 +2147,10 @@
     "noInstalledDescription": "Discover and install skills from repositories, or import existing skills",
     "discover": "Discover Skills",
     "import": "Import Existing",
-    "importDescription": "Select skills to import into CC Switch unified management",
+    "importDescription": "Select skills to import into CC Launcher unified management",
     "importSuccess": "Successfully imported {{count}} skills",
     "importSelected": "Import Selected ({{count}})",
-    "noUnmanagedFound": "No skills to import found. All skills are already managed by CC Switch.",
+    "noUnmanagedFound": "No skills to import found. All skills are already managed by CC Launcher.",
     "foundIn": "Found in",
     "local": "Local",
     "uninstallConfirm": "Are you sure you want to uninstall \"{{name}}\"? This will remove the skill from all apps and create a local backup first.",
@@ -2194,7 +2194,7 @@
   },
   "deeplink": {
     "confirmImport": "Confirm Import Provider",
-    "confirmImportDescription": "The following configuration will be imported from deep link into CC Switch",
+    "confirmImportDescription": "The following configuration will be imported from deep link into CC Launcher",
     "importPrompt": "Import Prompt",
     "importPromptDescription": "Please confirm whether to import this system prompt",
     "importMcp": "Import MCP Servers",
@@ -3254,6 +3254,14 @@
       "externalLink": {
         "title": "View instructions",
         "description": "Opens the related documentation page."
+      },
+      "createWorkdir": {
+        "title": "Create work directory",
+        "description": "Creates the launcher workspace and verifies it is writable."
+      },
+      "errors": {
+        "FIX_VALIDATION_FAILED": "The repair ran, but the follow-up check is still red. Rerun the check after the installer or system dialog finishes.",
+        "FIX_INSTALLER_FAILED": "The installer failed, so the repair did not complete."
       }
     }
   },
@@ -3303,6 +3311,20 @@
       "confirm": "Next: Start install",
       "noneSelected": "Pick at least one CLI before continuing"
     },
+    "source": {
+      "title": "Installer Sources",
+      "description": "Configure a private npm registry, Node.js distribution mirror, and Git for Windows mirror. Saved sources are used immediately by installs and fixes.",
+      "npmRegistry": "npm registry",
+      "nodeDistMirror": "Node.js dist mirror",
+      "gitForWindowsMirror": "Git for Windows mirror",
+      "save": "Save sources",
+      "saved": "Installer sources saved",
+      "saveFailed": "Failed to save installer sources",
+      "reset": "Restore defaults",
+      "resetDone": "Default installer sources restored",
+      "resetFailed": "Failed to restore default installer sources",
+      "invalidUrl": "Enter a valid http:// or https:// URL"
+    },
     "step4": {
       "registryPicker": {
         "title": "Registry probe",
@@ -3325,6 +3347,7 @@
       },
       "progress": {
         "phase": "Phase",
+        "source": "Source:",
         "speed": "{{kbps}} KB/s",
         "bytes": "{{loaded}} / {{total}} KB",
         "cancel": "Cancel",

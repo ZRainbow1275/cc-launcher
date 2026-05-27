@@ -9,6 +9,10 @@ use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
 
+fn remove_process_env_var(var_name: &str) {
+    std::env::remove_var(var_name);
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupInfo {
@@ -83,6 +87,7 @@ fn delete_single_env(conflict: &EnvConflict) -> Result<(), String> {
 
                 hkcu.delete_value(&conflict.var_name)
                     .map_err(|e| format!("删除注册表项失败: {}", e))?;
+                remove_process_env_var(&conflict.var_name);
             } else if conflict.source_path.contains("HKEY_LOCAL_MACHINE") {
                 let hklm = RegKey::predef(HKEY_LOCAL_MACHINE)
                     .open_subkey_with_flags(
@@ -93,6 +98,7 @@ fn delete_single_env(conflict: &EnvConflict) -> Result<(), String> {
 
                 hklm.delete_value(&conflict.var_name)
                     .map_err(|e| format!("删除系统注册表项失败: {}", e))?;
+                remove_process_env_var(&conflict.var_name);
             }
             Ok(())
         }
@@ -139,10 +145,14 @@ fn delete_single_env(conflict: &EnvConflict) -> Result<(), String> {
             fs::write(file_path, new_content.join("\n"))
                 .map_err(|e| format!("写入文件失败 {file_path}: {e}"))?;
 
+            remove_process_env_var(&conflict.var_name);
             Ok(())
         }
         "system" => {
-            // On Unix, we can't directly delete process environment variables
+            // This source represents the current CC Launcher process
+            // environment on Unix. Removing it prevents spawned CLI child
+            // processes from inheriting stale provider keys after the fix.
+            remove_process_env_var(&conflict.var_name);
             Ok(())
         }
         _ => Err(format!("未知的环境变量来源类型: {}", conflict.source_type)),
@@ -236,5 +246,61 @@ mod tests {
     fn test_backup_dir_creation() {
         let backup_dir = get_backup_dir();
         assert!(backup_dir.is_ok());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn remove_process_env_var_removes_current_process_value() {
+        let name = "__CC_LAUNCHER_ENV_FIX_HELPER__";
+        std::env::set_var(name, "stale");
+
+        remove_process_env_var(name);
+
+        assert!(std::env::var_os(name).is_none());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    #[serial_test::serial]
+    fn delete_system_env_removes_current_process_value() {
+        let name = "__CC_LAUNCHER_ENV_FIX_PROCESS__";
+        std::env::set_var(name, "stale");
+        let conflict = EnvConflict {
+            var_name: name.to_string(),
+            var_value: "stale".to_string(),
+            source_type: "system".to_string(),
+            source_path: "Process Environment".to_string(),
+        };
+
+        delete_single_env(&conflict).expect("system env cleanup should succeed");
+
+        assert!(std::env::var_os(name).is_none());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    #[serial_test::serial]
+    fn delete_file_env_also_removes_current_process_value() {
+        let name = "__CC_LAUNCHER_ENV_FIX_FILE__";
+        std::env::set_var(name, "stale");
+        let tmp = tempfile::NamedTempFile::new().expect("temp file");
+        std::fs::write(
+            tmp.path(),
+            format!("export {name}=stale\nexport KEEP_ME=1\n"),
+        )
+        .expect("write shell rc");
+        let conflict = EnvConflict {
+            var_name: name.to_string(),
+            var_value: "stale".to_string(),
+            source_type: "file".to_string(),
+            source_path: format!("{}:1", tmp.path().display()),
+        };
+
+        delete_single_env(&conflict).expect("file env cleanup should succeed");
+
+        let content = std::fs::read_to_string(tmp.path()).expect("read shell rc");
+        assert!(!content.contains(name));
+        assert!(content.contains("KEEP_ME"));
+        assert!(std::env::var_os(name).is_none());
     }
 }

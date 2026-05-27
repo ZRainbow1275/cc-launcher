@@ -20,6 +20,7 @@ import type {
   LocalizedString,
   ProbeItem,
   Locale,
+  SystemProbeReport,
 } from "@/lib/api/contracts";
 
 import { SYSTEM_PROBE_QUERY_KEY } from "./SystemCheckDashboard";
@@ -40,6 +41,8 @@ function actionTitleKey(action: FixAction): string {
       return "systemCheck.fix.installGit.title";
     case "cleanEnvVar":
       return "systemCheck.fix.cleanEnvVar.title";
+    case "createWorkdir":
+      return "systemCheck.fix.createWorkdir.title";
     case "openHomeDir":
       return "systemCheck.fix.openHomeDir.title";
     case "injectPathEntries":
@@ -57,6 +60,8 @@ function actionDescriptionKey(action: FixAction): string {
       return "systemCheck.fix.installGit.description";
     case "cleanEnvVar":
       return "systemCheck.fix.cleanEnvVar.description";
+    case "createWorkdir":
+      return "systemCheck.fix.createWorkdir.description";
     case "openHomeDir":
       return "systemCheck.fix.openHomeDir.description";
     case "injectPathEntries":
@@ -66,14 +71,33 @@ function actionDescriptionKey(action: FixAction): string {
   }
 }
 
-// TODO(E1-M6): Backend `apply_fix` emits a `LocalizedString` key-envelope
-// where every locale field carries the raw i18n key (e.g. `"fix.starting"`)
-// rather than a translated string. See `src-tauri/src/services/system_probe.rs::localize_key`.
-// This function should call `t(msg[known])` (with a safe fallback) so the
-// rendered phase text is the localized translation instead of the bare key.
-function pickLocalized(msg: LocalizedString, locale: string): string {
+const BACKEND_FIX_MESSAGE_KEYS: Record<string, string> = {
+  "fix.starting": "systemCheck.fix.phase.starting",
+  "fix.running": "systemCheck.fix.phase.running",
+  "fix.validating": "systemCheck.fix.phase.validating",
+  "fix.completed": "systemCheck.fix.phase.completed",
+  "fix.failed": "systemCheck.fix.phase.failed",
+};
+
+type TranslateFn = (key: string, options?: { defaultValue?: string }) => string;
+
+function pickLocalized(
+  msg: LocalizedString,
+  locale: string,
+  translate: TranslateFn,
+): string {
   const known: Locale = locale === "en" || locale === "ja" ? locale : "zh";
-  return msg[known];
+  const raw = msg[known];
+  const mapped = BACKEND_FIX_MESSAGE_KEYS[raw];
+  if (mapped) return translate(mapped, { defaultValue: raw });
+  if (raw.startsWith("FIX_")) {
+    return translate(`systemCheck.fix.errors.${raw}`, { defaultValue: raw });
+  }
+  return translate(raw, { defaultValue: raw });
+}
+
+function isBlockingStatus(status: ProbeItem["status"]): boolean {
+  return status === "red" || status === "missing";
 }
 
 interface FixActionDialogProps {
@@ -111,24 +135,54 @@ export function FixActionDialog({
     setPercent(0);
     setMessage("");
     setErrorText(null);
+    let lastPhase: Phase = "idle";
 
     try {
       for await (const event of systemProbe.apply_fix(action)) {
         if (cancelRef.current) break;
+        lastPhase = event.phase;
+        if (event.phase === "completed") {
+          setPhase("validating");
+          setPercent(95);
+          setMessage(t("systemCheck.fix.phase.validating"));
+          continue;
+        }
         setPhase(event.phase);
         if (typeof event.percent === "number") {
           setPercent(event.percent);
         }
-        setMessage(pickLocalized(event.message, i18n.language));
+        setMessage(pickLocalized(event.message, i18n.language, t));
         if (event.phase === "failed" && event.error) {
-          setErrorText(pickLocalized(event.error.message, i18n.language));
+          setErrorText(pickLocalized(event.error.message, i18n.language, t));
         }
+      }
+      if (!cancelRef.current && lastPhase === "completed") {
+        const report = await queryClient.fetchQuery<SystemProbeReport>({
+          queryKey: SYSTEM_PROBE_QUERY_KEY,
+          queryFn: () => systemProbe.run(),
+        });
+        const refreshedItem = report.items.find((it) => it.id === item.id);
+        if (refreshedItem && isBlockingStatus(refreshedItem.status)) {
+          setPhase("failed");
+          setPercent(100);
+          setMessage(t("systemCheck.fix.phase.failed"));
+          setErrorText(
+            t("systemCheck.fix.errors.FIX_VALIDATION_FAILED", {
+              defaultValue:
+                "The repair ran, but the follow-up check is still red. Rerun the check after the installer or system dialog finishes.",
+            }),
+          );
+          return;
+        }
+        setPhase("completed");
+        setPercent(100);
+        setMessage(t("systemCheck.fix.phase.completed"));
       }
     } catch (err) {
       setPhase("failed");
       setErrorText(String(err));
     }
-  }, [action, i18n.language]);
+  }, [action, i18n.language, item.id, queryClient, t]);
 
   useEffect(() => {
     void runFix();

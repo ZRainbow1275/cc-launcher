@@ -14,6 +14,7 @@ use std::time::Instant;
 
 use serde_json::json;
 
+use crate::services::installer::node_runtime::NodeRuntime;
 use crate::services::system_probe::{FixAction, ProbeGroup, ProbeItem, ProbeStatus};
 
 /// MVP target Node major version (per D5+).
@@ -78,22 +79,42 @@ fn probe_node() -> ProbeItem {
         group: ProbeGroup::Runtime,
     };
 
-    if let Some(path) = locate("node") {
-        if let Some(version) = run_version(&path) {
-            let major = parse_node_major(&version).unwrap_or(0);
-            item.value = json!({ "version": version, "path": path.display().to_string() });
-            item.status = if major >= TARGET_NODE_LTS_MAJOR as u32 {
-                item.fix_action = None;
-                item.message_key = "probe.node.green".into();
-                ProbeStatus::Green
-            } else if major >= 18 {
-                item.message_key = "probe.node.yellow".into();
-                ProbeStatus::Yellow
-            } else {
-                item.message_key = "probe.node.red".into();
-                ProbeStatus::Red
-            };
-        }
+    if let Some((path, version, major, is_private_runtime)) = probe_private_node() {
+        item.value = json!({
+            "version": version,
+            "path": path.display().to_string(),
+            "isPrivateRuntime": is_private_runtime,
+            "majorVersion": major,
+        });
+        item.status = if major >= TARGET_NODE_LTS_MAJOR as u32 {
+            item.fix_action = None;
+            item.message_key = "probe.node.green".into();
+            ProbeStatus::Green
+        } else if major >= 18 {
+            item.message_key = "probe.node.yellow".into();
+            ProbeStatus::Yellow
+        } else {
+            item.message_key = "probe.node.red".into();
+            ProbeStatus::Red
+        };
+    } else if let Some((path, version, major)) = probe_host_node() {
+        item.value = json!({
+            "version": version,
+            "path": path.display().to_string(),
+            "isPrivateRuntime": false,
+            "majorVersion": major,
+        });
+        item.status = if major >= TARGET_NODE_LTS_MAJOR as u32 {
+            item.fix_action = None;
+            item.message_key = "probe.node.green".into();
+            ProbeStatus::Green
+        } else if major >= 18 {
+            item.message_key = "probe.node.yellow".into();
+            ProbeStatus::Yellow
+        } else {
+            item.message_key = "probe.node.red".into();
+            ProbeStatus::Red
+        };
     }
 
     item.elapsed_ms = t0.elapsed().as_millis() as u64;
@@ -109,30 +130,49 @@ fn probe_npm() -> ProbeItem {
         value: serde_json::Value::Null,
         message_key: "probe.npm.missing".into(),
         // No standalone fix action — npm ships with Node.
-        fix_action: None,
+        fix_action: Some(FixAction::InstallNode {
+            target_lts_major: TARGET_NODE_LTS_MAJOR,
+        }),
         elapsed_ms: 0,
         group: ProbeGroup::Runtime,
     };
 
-    if let Some(path) = locate("npm") {
-        if let Some(version) = run_version(&path) {
-            let major = version
-                .split('.')
-                .next()
-                .and_then(|s| s.parse::<u32>().ok())
-                .unwrap_or(0);
-            item.value = json!({ "version": version, "path": path.display().to_string() });
-            item.status = if major >= 10 {
-                item.message_key = "probe.npm.green".into();
-                ProbeStatus::Green
-            } else if major >= 9 {
-                item.message_key = "probe.npm.yellow".into();
-                ProbeStatus::Yellow
-            } else {
-                item.message_key = "probe.npm.red".into();
-                ProbeStatus::Red
-            };
-        }
+    if let Some((path, version, major, is_private_runtime)) = probe_private_npm() {
+        item.value = json!({
+            "version": version,
+            "path": path.display().to_string(),
+            "isPrivateRuntime": is_private_runtime,
+            "majorVersion": major,
+        });
+        item.status = if major >= 10 {
+            item.fix_action = None;
+            item.message_key = "probe.npm.green".into();
+            ProbeStatus::Green
+        } else if major >= 9 {
+            item.message_key = "probe.npm.yellow".into();
+            ProbeStatus::Yellow
+        } else {
+            item.message_key = "probe.npm.red".into();
+            ProbeStatus::Red
+        };
+    } else if let Some((path, version, major)) = probe_host_npm() {
+        item.value = json!({
+            "version": version,
+            "path": path.display().to_string(),
+            "isPrivateRuntime": false,
+            "majorVersion": major,
+        });
+        item.status = if major >= 10 {
+            item.fix_action = None;
+            item.message_key = "probe.npm.green".into();
+            ProbeStatus::Green
+        } else if major >= 9 {
+            item.message_key = "probe.npm.yellow".into();
+            ProbeStatus::Yellow
+        } else {
+            item.message_key = "probe.npm.red".into();
+            ProbeStatus::Red
+        };
     }
 
     item.elapsed_ms = t0.elapsed().as_millis() as u64;
@@ -158,8 +198,7 @@ fn probe_git() -> ProbeItem {
     // perfectly fine.
     #[cfg(target_os = "windows")]
     {
-        if let Ok(private_git) =
-            crate::services::installer::portable_git::PortableGit::git_binary()
+        if let Ok(private_git) = crate::services::installer::portable_git::PortableGit::git_binary()
         {
             if private_git.exists() {
                 if let Some(raw) = run_version(&private_git) {
@@ -220,9 +259,20 @@ fn probe_path() -> ProbeItem {
         .map(|kw| (*kw).to_string())
         .collect();
 
-    let status = if missing.is_empty() {
+    let covered_by_private_runtime: Vec<String> = missing
+        .iter()
+        .filter(|kw| is_covered_by_private_runtime(kw))
+        .cloned()
+        .collect();
+    let unresolved: Vec<String> = missing
+        .iter()
+        .filter(|kw| !is_covered_by_private_runtime(kw))
+        .cloned()
+        .collect();
+
+    let status = if unresolved.is_empty() {
         ProbeStatus::Green
-    } else if missing.len() < critical_keywords.len() {
+    } else if unresolved.len() < critical_keywords.len() {
         ProbeStatus::Yellow
     } else {
         ProbeStatus::Red
@@ -234,24 +284,112 @@ fn probe_path() -> ProbeItem {
         _ => "probe.path.red",
     };
 
-    let fix_action = if !missing.is_empty() {
-        // Launcher will inject these into subprocess PATH only — read-only at host level.
-        Some(FixAction::InjectPathEntries {
-            entries: missing.clone(),
-        })
-    } else {
-        None
-    };
-
+    // Launcher will inject these into subprocess PATH only — read-only at host level.
     ProbeItem {
         id: "path".into(),
         name_key: "probe.path.name".into(),
         status,
-        value: json!({ "entries": entries, "missing": missing }),
+        value: json!({
+            "entries": entries,
+            "missing": missing,
+            "coveredByPrivateRuntime": covered_by_private_runtime,
+            "unresolved": unresolved,
+        }),
         message_key: message_key.into(),
-        fix_action,
+        fix_action: None,
         elapsed_ms: t0.elapsed().as_millis() as u64,
         group: ProbeGroup::Runtime,
+    }
+}
+
+fn probe_private_node() -> Option<(PathBuf, String, u32, bool)> {
+    let path = NodeRuntime::node_binary().ok()?;
+    if !path.exists() {
+        return None;
+    }
+    let version = run_version(&path)?;
+    let major = parse_node_major(&version).unwrap_or(0);
+    Some((path, version, major, true))
+}
+
+fn probe_host_node() -> Option<(PathBuf, String, u32)> {
+    let path = locate("node")?;
+    let version = run_version(&path)?;
+    let major = parse_node_major(&version).unwrap_or(0);
+    Some((path, version, major))
+}
+
+fn probe_private_npm() -> Option<(PathBuf, String, u32, bool)> {
+    let node = NodeRuntime::node_binary().ok()?;
+    let npm_cli = NodeRuntime::npm_cli_js().ok()?;
+    if !node.exists() || !npm_cli.exists() {
+        return None;
+    }
+    let version = run_npm_version(&node, &npm_cli)?;
+    let major = version
+        .split('.')
+        .next()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    Some((npm_cli, version, major, true))
+}
+
+fn probe_host_npm() -> Option<(PathBuf, String, u32)> {
+    let path = locate("npm")?;
+    let version = run_version(&path)?;
+    let major = version
+        .split('.')
+        .next()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    Some((path, version, major))
+}
+
+fn run_npm_version(node: &PathBuf, npm_cli: &PathBuf) -> Option<String> {
+    let mut cmd = Command::new(node);
+    cmd.arg(npm_cli).arg("--version");
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn is_covered_by_private_runtime(keyword: &str) -> bool {
+    match keyword {
+        "node" => probe_private_node()
+            .map(|(_, version, major, _)| {
+                major >= TARGET_NODE_LTS_MAJOR as u32 && !version.is_empty()
+            })
+            .unwrap_or(false),
+        "npm" => probe_private_npm()
+            .map(|(_, version, major, _)| major >= 10 && !version.is_empty())
+            .unwrap_or(false),
+        "git" => {
+            #[cfg(target_os = "windows")]
+            {
+                if let Ok(private_git) =
+                    crate::services::installer::portable_git::PortableGit::git_binary()
+                {
+                    return private_git.exists() && run_version(&private_git).is_some();
+                }
+            }
+            false
+        }
+        _ => false,
     }
 }
 
@@ -299,6 +437,7 @@ mod tests {
             ProbeStatus::Green => {
                 assert!(it.fix_action.is_none());
                 assert!(it.value.get("version").is_some());
+                assert!(it.value.get("majorVersion").is_some());
             }
             ProbeStatus::Yellow | ProbeStatus::Red => {
                 // Old Node — fix action stays InstallNode.
@@ -334,16 +473,14 @@ mod tests {
         let v = it.value.as_object().unwrap();
         assert!(v.contains_key("entries"));
         assert!(v.contains_key("missing"));
-        let missing_list = v.get("missing").and_then(|x| x.as_array()).unwrap();
-        if missing_list.is_empty() {
+        assert!(v.contains_key("coveredByPrivateRuntime"));
+        assert!(v.contains_key("unresolved"));
+        let unresolved = v.get("unresolved").and_then(|x| x.as_array()).unwrap();
+        if unresolved.is_empty() {
             assert_eq!(it.status, ProbeStatus::Green);
-            assert!(it.fix_action.is_none());
         } else {
-            assert!(it.fix_action.is_some());
-            assert!(matches!(
-                it.fix_action,
-                Some(FixAction::InjectPathEntries { .. })
-            ));
+            assert!(matches!(it.status, ProbeStatus::Yellow | ProbeStatus::Red));
         }
+        assert!(it.fix_action.is_none());
     }
 }

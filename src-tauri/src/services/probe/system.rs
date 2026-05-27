@@ -182,11 +182,7 @@ fn probe_disk() -> ProbeItem {
                 ProbeStatus::Yellow => "probe.disk.yellow",
                 _ => "probe.disk.red",
             };
-            let fix = if matches!(status, ProbeStatus::Yellow | ProbeStatus::Red) {
-                Some(crate::services::system_probe::FixAction::OpenHomeDir)
-            } else {
-                None
-            };
+            let fix = None;
             (
                 status,
                 json!({
@@ -284,11 +280,12 @@ mod tests {
         let it = probe_disk();
         assert_eq!(it.id, "disk");
         // We do not assert green/yellow/red because the test host's disk
-        // state is unknown, but we DO assert that yellow/red imply OpenHomeDir.
+        // state is unknown. Low disk is informational because the launcher
+        // cannot safely free disk space for the user.
         match (it.status, &it.fix_action) {
             (ProbeStatus::Green, None) => {}
-            (ProbeStatus::Yellow, Some(crate::services::system_probe::FixAction::OpenHomeDir)) => {}
-            (ProbeStatus::Red, Some(crate::services::system_probe::FixAction::OpenHomeDir)) => {}
+            (ProbeStatus::Yellow, None) => {}
+            (ProbeStatus::Red, None) => {}
             (ProbeStatus::Unknown, None) => {}
             other => panic!("unexpected disk status/fix combo: {other:?}"),
         }

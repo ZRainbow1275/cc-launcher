@@ -9,7 +9,7 @@
 //! - DiskWipe (5):       rm -rf /, rm -rf /*, format C:, cipher /w:C:, dd if=/dev/zero of=/dev/sda
 //! - BootCritical (3):   /boot/*, /EFI/*, bootrec /fixmbr
 //! - HostsFile (2):      /etc/hosts 写, C:\Windows\System32\drivers\etc\hosts 写
-//! - LauncherSelf (1):   写 cc-launcher.exe / cc-switch.app 自身二进制
+//! - LauncherSelf (1):   写 CC Launcher.exe / CC Launcher.app 自身二进制
 //! - ReverseShell (2):   bash -i >& /dev/tcp/..., nc -e /bin/sh
 //! - SudoDestructive (3): sudo rm, sudo chmod 777 /, sudo dd of=/dev/
 //!
@@ -160,8 +160,8 @@ static REDLINES: Lazy<Vec<L2Redline>> = Lazy::new(|| {
         (
             "launcher.self_binary",
             L2Category::LauncherSelf,
-            // 写/删 cc-launcher.exe 或 cc-switch.app 自身。允许中间任意路径段（含空格）。
-            r"(?i)(>\s*|>>\s*|\bcp\s+|\bmv\s+|\brm\s+-[a-z]*[rf][a-z]*\s+|\bdel\s+|\bremove-item\s+|\berase\s+)[^|;&]*?(cc-launcher\.exe|cc-switch\.exe|cc-switch\.app(/[^|;&\s]*)?)",
+            // 写/删 CC Launcher.exe / legacy cc-launcher.exe 或 macOS .app 自身。允许中间任意路径段（含空格）。
+            r"(?i)(>\s*|>>\s*|\bcp\s+|\bmv\s+|\brm\s+-[a-z]*[rf][a-z]*\s+|\bdel\s+|\bremove-item\s+|\berase\s+)[^|;&]*?(cc\s+launcher\.exe|cc-launcher\.exe|cc-switch\.exe|(cc-switch|cc\s+launcher)\.app(/[^|;&\s]*)?)",
             "sandbox.l2.launcher.self_binary",
         ),
         // ── ReverseShell (2) ───────────────────────────────────────────
@@ -465,6 +465,11 @@ mod tests {
     #[test]
     fn launcher_self_binary_positive() {
         assert!(check("rm -rf /Applications/cc-switch.app").is_some());
+        assert!(check("rm -rf /Applications/CC Launcher.app").is_some());
+        assert!(
+            check("mv evil /Applications/CC Launcher.app/Contents/MacOS/CC Launcher").is_some()
+        );
+        assert!(check("del C:\\Program Files\\CC Launcher.exe").is_some());
         assert!(check("del C:\\Program Files\\cc-launcher.exe").is_some());
         assert!(check("cp evil.exe /Users/bob/cc-launcher.exe").is_some());
     }
@@ -472,8 +477,10 @@ mod tests {
     #[test]
     fn launcher_self_binary_negative() {
         // 读取 / 启动不算写入
+        assert!(check("\"C:\\Program Files\\CC Launcher\\CC Launcher.exe\" --help").is_none());
         assert!(check("./cc-launcher.exe --help").is_none());
         assert!(check("open /Applications/cc-switch.app").is_none());
+        assert!(check("open /Applications/CC Launcher.app").is_none());
     }
 
     // ─── ReverseShell ──────────────────────────────────────────

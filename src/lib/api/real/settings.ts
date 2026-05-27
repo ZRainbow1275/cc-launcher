@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { Locale, OperationResult, UiMode } from "../contracts";
+import {
+  InstallerSourceConfig,
+  Locale,
+  OperationResult,
+  UiMode,
+} from "../contracts";
 
 export const settingsReal = {
   async get_ui_mode(): Promise<UiMode> {
@@ -24,6 +29,26 @@ export const settingsReal = {
     const raw = await invoke<unknown>("settings_set_locale", {
       locale: parsed,
     });
+    return OperationResult.parse(raw);
+  },
+
+  async get_installer_source_config(): Promise<InstallerSourceConfig> {
+    const raw = await invoke<unknown>("settings_get_installer_source_config");
+    return InstallerSourceConfig.parse(raw);
+  },
+
+  async set_installer_source_config(
+    config: InstallerSourceConfig,
+  ): Promise<OperationResult> {
+    const parsed = InstallerSourceConfig.parse(config);
+    const raw = await invoke<unknown>("settings_set_installer_source_config", {
+      config: parsed,
+    });
+    return OperationResult.parse(raw);
+  },
+
+  async reset_installer_source_config(): Promise<OperationResult> {
+    const raw = await invoke<unknown>("settings_reset_installer_source_config");
     return OperationResult.parse(raw);
   },
 };

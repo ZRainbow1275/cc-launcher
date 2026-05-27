@@ -87,7 +87,10 @@ async fn integration_aggregate_status_is_well_formed() {
 
     // generated_at is recent.
     let now = chrono::Utc::now();
-    let delta = now.signed_duration_since(report.generated_at).num_seconds().abs();
+    let delta = now
+        .signed_duration_since(report.generated_at)
+        .num_seconds()
+        .abs();
     assert!(delta < 60, "generated_at should be within last minute");
 
     // Every item has non-empty stable identifiers.

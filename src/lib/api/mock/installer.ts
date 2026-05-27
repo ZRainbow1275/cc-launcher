@@ -14,6 +14,8 @@ import { delay, shouldFail } from "./runtime";
 import { getState } from "./scenarios";
 
 const DOMAIN = "installer";
+const MOCK_RUNTIME_ROOT = "C:\\Users\\you\\AppData\\Local\\cc-switch\\runtime";
+const MOCK_NODE_PATH = `${MOCK_RUNTIME_ROOT}\\node\\node.exe`;
 
 const REGISTRY_DEFS: {
   name: RegistryName;
@@ -33,6 +35,16 @@ const REGISTRY_DEFS: {
     baseLatency: 340,
   },
 ];
+
+function configuredRegistryDefs(): {
+  name: RegistryName;
+  url: string;
+  baseLatency: number;
+}[] {
+  const custom = getState().installerSourceConfig.npmRegistry;
+  if (!custom) return REGISTRY_DEFS;
+  return [{ name: "custom", url: custom, baseLatency: 120 }, ...REGISTRY_DEFS];
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -101,7 +113,10 @@ export const installerMock = {
         return;
       }
 
-      const chosen = opts?.registry ?? REGISTRY_DEFS[1].url;
+      const chosen =
+        opts?.registry ??
+        state.installerSourceConfig.npmRegistry ??
+        REGISTRY_DEFS[1].url;
 
       if (!state.nodeStatus.installed && !opts?.skipNodeCheck) {
         await progress(
@@ -140,15 +155,15 @@ export const installerMock = {
       );
       for (const e of events.splice(0)) yield e;
 
-      const version = cli === "claude" ? "2.1.148" : "0.133.0";
+      const version = cli === "claude" ? "2.1.150" : "0.133.0";
       state.cliStatus[cli] = {
         cli,
         installed: true,
         version,
         path:
           cli === "claude"
-            ? "C:\\Users\\you\\.cc-switch\\runtime\\node_modules\\.bin\\claude.cmd"
-            : "C:\\Users\\you\\.cc-switch\\runtime\\node_modules\\.bin\\codex.cmd",
+            ? `${MOCK_RUNTIME_ROOT}\\claude\\claude.cmd`
+            : `${MOCK_RUNTIME_ROOT}\\codex\\codex.cmd`,
         lastChecked: nowIso(),
       };
 
@@ -195,7 +210,8 @@ export const installerMock = {
     }
     await delay();
     const state = getState();
-    const candidates: RegistryProbe[] = REGISTRY_DEFS.map((r) =>
+    const defs = configuredRegistryDefs();
+    const candidates: RegistryProbe[] = defs.map((r) =>
       RegistryProbe.parse({
         name: r.name,
         url: r.url,
@@ -210,9 +226,12 @@ export const installerMock = {
       throw errors.networkUnreachable;
     }
 
-    const winner = [...candidates]
-      .filter((c) => c.ok)
-      .sort((a, b) => a.latencyMs - b.latencyMs)[0]!;
+    const custom = candidates.find((c) => c.name === "custom" && c.ok);
+    const winner =
+      custom ??
+      [...candidates]
+        .filter((c) => c.ok)
+        .sort((a, b) => a.latencyMs - b.latencyMs)[0]!;
 
     return RegistryPickResult.parse({
       candidates,
@@ -258,6 +277,7 @@ export const installerMock = {
           phase: "probing-registry",
           message: messages.installerProbingRegistry,
           percent: 10,
+          registry: state.installerSourceConfig.nodeDistMirror,
         },
         stepDelay,
       );
@@ -269,6 +289,7 @@ export const installerMock = {
           phase: "installing-node",
           message: messages.installerInstallingNode,
           percent: 50,
+          registry: state.installerSourceConfig.nodeDistMirror,
         },
         stepDelay,
       );
@@ -288,7 +309,7 @@ export const installerMock = {
       state.nodeStatus = {
         installed: true,
         version: "v20.11.0",
-        path: "C:\\Users\\you\\.cc-switch\\runtime\\node\\node.exe",
+        path: MOCK_NODE_PATH,
         isPrivateRuntime: true,
         majorVersion: 20,
       };

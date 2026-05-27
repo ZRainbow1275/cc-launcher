@@ -7,6 +7,8 @@
 //! Matches frontend `RegistryProbe` / `RegistryPickResult` contract in
 //! `src/lib/api/contracts.ts`.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -15,6 +17,10 @@ use futures::future::join_all;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use super::source_config::{
+    registry_endpoint_chain, InstallerSourceConfig, MirrorEndpoint, CUSTOM_SOURCE_NAME,
+};
 
 /// Canary npm package used for the per-registry probe.
 ///
@@ -34,8 +40,8 @@ const CACHE_FILENAME: &str = "registry_probe_cache.json";
 
 /// 4-registry whitelist. Order is irrelevant since we sort by latency at the end.
 ///
-/// **Compile-time hard-coded** — no Tauri command / config file may add/remove entries.
-/// Future expansion goes via D9 (custom registry in expert mode), not here.
+/// The built-ins remain compile-time hard-coded, but a persisted custom source
+/// can be inserted at the front of the chain via `InstallerSourceConfig`.
 pub const REGISTRY_DEFS: &[RegistryDef] = &[
     RegistryDef {
         name: "npmjs",
@@ -102,7 +108,7 @@ impl RegistryProbeService {
     /// Returns the candidates list (sorted by latency, failed last) plus the
     /// winning registry (lowest latency, ok==true). Errors when *all* 4 fail.
     pub async fn smart_pick(force_refresh: bool) -> Result<RegistryPickResult, RegistryProbeError> {
-        Self::smart_pick_with_canary(CANARY_PKG, force_refresh).await
+        Self::smart_pick_with_config(&InstallerSourceConfig::default(), force_refresh).await
     }
 
     /// Same as [`smart_pick`] but with a configurable canary package — used by tests.
@@ -110,7 +116,17 @@ impl RegistryProbeService {
         canary: &str,
         force_refresh: bool,
     ) -> Result<RegistryPickResult, RegistryProbeError> {
-        Self::smart_pick_inner(canary, force_refresh, REGISTRY_DEFS).await
+        let endpoints = registry_endpoint_chain(&InstallerSourceConfig::default(), REGISTRY_DEFS);
+        Self::smart_pick_inner(canary, force_refresh, &endpoints).await
+    }
+
+    /// Probe registries with a persisted source configuration.
+    pub async fn smart_pick_with_config(
+        config: &InstallerSourceConfig,
+        force_refresh: bool,
+    ) -> Result<RegistryPickResult, RegistryProbeError> {
+        let endpoints = registry_endpoint_chain(config, REGISTRY_DEFS);
+        Self::smart_pick_inner(CANARY_PKG, force_refresh, &endpoints).await
     }
 
     /// Internal entry point: accepts an injectable mirror list for test isolation.
@@ -124,9 +140,9 @@ impl RegistryProbeService {
     pub async fn smart_pick_inner(
         canary: &str,
         force_refresh: bool,
-        defs: &[RegistryDef],
+        endpoints: &[MirrorEndpoint],
     ) -> Result<RegistryPickResult, RegistryProbeError> {
-        let cache_path = cache_file_path();
+        let cache_path = cache_file_path(endpoints);
 
         // Step 1: fresh cache short-circuit.
         if !force_refresh {
@@ -147,11 +163,11 @@ impl RegistryProbeService {
             .build()
             .map_err(|e| RegistryProbeError::ClientBuild(e.to_string()))?;
 
-        let probes = defs.iter().map(|def| {
+        let probes = endpoints.iter().map(|def| {
             let client = client.clone();
             let url = format!(
                 "{}/{}",
-                def.url.trim_end_matches('/'),
+                def.base.trim_end_matches('/'),
                 // Encode `@scope/name` keeping the slash (npm spec uses literal /).
                 canary
             );
@@ -168,7 +184,13 @@ impl RegistryProbeService {
             (false, false) => a.latency_ms.cmp(&b.latency_ms),
         });
 
-        match candidates.iter().find(|c| c.ok).cloned() {
+        let winner = candidates
+            .iter()
+            .find(|c| c.ok && c.name == CUSTOM_SOURCE_NAME)
+            .cloned()
+            .or_else(|| candidates.iter().find(|c| c.ok).cloned());
+
+        match winner {
             Some(winner) => {
                 let result = RegistryPickResult {
                     candidates,
@@ -208,7 +230,8 @@ impl RegistryProbeService {
 ///
 /// Returns `None` if no data dir is available (extremely rare — only on broken
 /// platforms). Caller silently degrades to "no cache" rather than crash.
-fn cache_file_path() -> Option<PathBuf> {
+fn cache_file_path(endpoints: &[MirrorEndpoint]) -> Option<PathBuf> {
+    let filename = cache_filename(endpoints);
     if let Ok(override_dir) = std::env::var("CC_SWITCH_TEST_HOME") {
         let trimmed = override_dir.trim();
         if !trimmed.is_empty() {
@@ -216,12 +239,24 @@ fn cache_file_path() -> Option<PathBuf> {
                 PathBuf::from(trimmed)
                     .join("cc-switch")
                     .join("runtime")
-                    .join(CACHE_FILENAME),
+                    .join(filename),
             );
         }
     }
-    dirs::data_local_dir()
-        .map(|base| base.join("cc-switch").join("runtime").join(CACHE_FILENAME))
+    dirs::data_local_dir().map(|base| base.join("cc-switch").join("runtime").join(filename))
+}
+
+fn cache_filename(endpoints: &[MirrorEndpoint]) -> String {
+    if !endpoints.iter().any(|e| e.name == CUSTOM_SOURCE_NAME) {
+        return CACHE_FILENAME.to_string();
+    }
+
+    let mut hasher = DefaultHasher::new();
+    for endpoint in endpoints {
+        endpoint.name.hash(&mut hasher);
+        endpoint.base.hash(&mut hasher);
+    }
+    format!("registry_probe_cache_{:016x}.json", hasher.finish())
 }
 
 /// Read the cache file, return parsed result if and only if it's fresh (< CACHE_TTL).
@@ -276,7 +311,7 @@ fn write_cache_atomic(path: &PathBuf, result: &RegistryPickResult) -> std::io::R
     Ok(())
 }
 
-async fn probe_one(client: &Client, def: &RegistryDef, url: &str) -> RegistryProbe {
+async fn probe_one(client: &Client, def: &MirrorEndpoint, url: &str) -> RegistryProbe {
     let started = Instant::now();
     match client.get(url).send().await {
         Ok(resp) => {
@@ -284,8 +319,8 @@ async fn probe_one(client: &Client, def: &RegistryDef, url: &str) -> RegistryPro
             let elapsed_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
             let ok = status.is_success();
             RegistryProbe {
-                name: def.name.to_string(),
-                url: def.url.to_string(),
+                name: def.name.clone(),
+                url: def.base.clone(),
                 ok,
                 latency_ms: elapsed_ms,
                 status_code: Some(status.as_u16()),
@@ -306,8 +341,8 @@ async fn probe_one(client: &Client, def: &RegistryDef, url: &str) -> RegistryPro
                 err.to_string()
             };
             RegistryProbe {
-                name: def.name.to_string(),
-                url: def.url.to_string(),
+                name: def.name.clone(),
+                url: def.base.clone(),
                 ok: false,
                 latency_ms: elapsed_ms,
                 status_code: None,
@@ -352,18 +387,12 @@ mod tests {
             .build()
             .unwrap();
         let defs = [
-            RegistryDef {
-                name: "fast",
-                url: Box::leak(fast.url("").into_boxed_str()),
-            },
-            RegistryDef {
-                name: "slow",
-                url: Box::leak(slow.url("").into_boxed_str()),
-            },
+            MirrorEndpoint::new("fast", Box::leak(fast.url("").into_boxed_str())),
+            MirrorEndpoint::new("slow", Box::leak(slow.url("").into_boxed_str())),
         ];
         let probes = defs.iter().map(|def| {
             let client = client.clone();
-            let url = format!("{}/{}", def.url.trim_end_matches('/'), CANARY_PKG);
+            let url = format!("{}/{}", def.base.trim_end_matches('/'), CANARY_PKG);
             async move { probe_one(&client, def, &url).await }
         });
         let mut results: Vec<RegistryProbe> = futures::future::join_all(probes).await;
@@ -411,13 +440,13 @@ mod tests {
         std::fs::write(&path, serde_json::to_string_pretty(value).unwrap()).unwrap();
     }
 
-    /// Helper: build a "guaranteed-fail" RegistryDef pointing at refused port.
-    fn refused_def(name: &'static str) -> RegistryDef {
-        RegistryDef {
+    /// Helper: build a "guaranteed-fail" endpoint pointing at refused port.
+    fn refused_def(name: &'static str) -> MirrorEndpoint {
+        MirrorEndpoint::new(
             name,
             // 127.0.0.1:1 is reliably refused on all platforms.
-            url: "http://127.0.0.1:1",
-        }
+            "http://127.0.0.1:1",
+        )
     }
 
     /// 1. Fresh cache (1h old) short-circuits the probe — no network call.
@@ -444,6 +473,39 @@ mod tests {
         std::env::remove_var("CC_SWITCH_TEST_HOME");
     }
 
+    /// A configured custom npm source must not reuse the default registry cache.
+    #[tokio::test]
+    #[serial]
+    async fn custom_source_uses_config_specific_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+
+        let cached = make_cached("npmmirror", "https://registry.npmmirror.com", 1);
+        write_cache_to(temp.path(), &cached);
+
+        let custom = MockServer::start_async().await;
+        let mock = custom
+            .mock_async(|when, then| {
+                when.method(GET).path("/@openai/codex");
+                then.status(200).body("{}");
+            })
+            .await;
+        let defs = [MirrorEndpoint::from_custom(Box::leak(
+            custom.url("").into_boxed_str(),
+        ))];
+
+        let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
+            .await
+            .unwrap();
+
+        assert!(!result.cached, "custom source must run its own probe");
+        assert_eq!(result.chosen_name, CUSTOM_SOURCE_NAME);
+        assert_eq!(result.chosen, defs[0].base.as_str());
+        mock.assert_async().await;
+
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
     /// 2. Expired cache (25h old) does NOT short-circuit — probe runs.
     #[tokio::test]
     #[serial]
@@ -462,10 +524,10 @@ mod tests {
                 then.status(200).body("{}");
             })
             .await;
-        let defs = [RegistryDef {
-            name: "live",
-            url: Box::leak(server.url("").into_boxed_str()),
-        }];
+        let defs = [MirrorEndpoint::new(
+            "live",
+            Box::leak(server.url("").into_boxed_str()),
+        )];
 
         let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
             .await
@@ -497,10 +559,10 @@ mod tests {
                 then.status(200).body("{}");
             })
             .await;
-        let defs = [RegistryDef {
-            name: "live",
-            url: Box::leak(server.url("").into_boxed_str()),
-        }];
+        let defs = [MirrorEndpoint::new(
+            "live",
+            Box::leak(server.url("").into_boxed_str()),
+        )];
 
         let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, true, &defs)
             .await
@@ -528,10 +590,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(
-            result.cached,
-            "stale-cache fallback must set cached: true"
-        );
+        assert!(result.cached, "stale-cache fallback must set cached: true");
         assert_eq!(result.chosen_name, "npmmirror");
 
         std::env::remove_var("CC_SWITCH_TEST_HOME");
@@ -575,10 +634,10 @@ mod tests {
                 then.status(200).body("{}");
             })
             .await;
-        let defs = [RegistryDef {
-            name: "live",
-            url: Box::leak(server.url("").into_boxed_str()),
-        }];
+        let defs = [MirrorEndpoint::new(
+            "live",
+            Box::leak(server.url("").into_boxed_str()),
+        )];
 
         let result = RegistryProbeService::smart_pick_inner(CANARY_PKG, false, &defs)
             .await
@@ -604,10 +663,10 @@ mod tests {
                 then.status(200).body("{}");
             })
             .await;
-        let defs = [RegistryDef {
-            name: "live",
-            url: Box::leak(server.url("").into_boxed_str()),
-        }];
+        let defs = [MirrorEndpoint::new(
+            "live",
+            Box::leak(server.url("").into_boxed_str()),
+        )];
 
         // Subtract 2s to absorb filesystem mtime resolution (NTFS ~100ns, FAT 2s,
         // and clock jitter on slow runners). Without this absorbtion the assertion
@@ -663,18 +722,12 @@ mod tests {
             .build()
             .unwrap();
         let defs = [
-            RegistryDef {
-                name: "good",
-                url: Box::leak(good.url("").into_boxed_str()),
-            },
-            RegistryDef {
-                name: "bad",
-                url: bad_url,
-            },
+            MirrorEndpoint::new("good", Box::leak(good.url("").into_boxed_str())),
+            MirrorEndpoint::new("bad", bad_url),
         ];
         let probes = defs.iter().map(|def| {
             let client = client.clone();
-            let url = format!("{}/{}", def.url.trim_end_matches('/'), CANARY_PKG);
+            let url = format!("{}/{}", def.base.trim_end_matches('/'), CANARY_PKG);
             async move { probe_one(&client, def, &url).await }
         });
         let results: Vec<RegistryProbe> = futures::future::join_all(probes).await;

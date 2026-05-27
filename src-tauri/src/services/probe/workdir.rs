@@ -5,9 +5,9 @@
 //! 2. `workdirWritable`  — can write a sentinel file inside the directory
 //!
 //! Probes are read-only at the host level: when the directory does not
-//! exist we report `missing` and surface an [`FixAction::OpenHomeDir`]
-//! so the user (or the launcher init) can create it explicitly. We do
-//! NOT auto-create here.
+//! exist we report `missing` and surface a [`FixAction::CreateWorkdir`].
+//! We do NOT auto-create from the probe itself; creation happens only
+//! inside the explicit fix action.
 
 use std::time::Instant;
 
@@ -42,12 +42,12 @@ fn probe_workdir_exists(workdir: &Option<std::path::PathBuf>) -> ProbeItem {
             } else {
                 "probe.workdirExists.missing"
             };
-            // When missing, point the user at their home dir so they can
-            // create / verify the path themselves.
             let fix = if exists {
                 None
             } else {
-                Some(FixAction::OpenHomeDir)
+                Some(FixAction::CreateWorkdir {
+                    path: p.display().to_string(),
+                })
             };
             (
                 status,
@@ -89,7 +89,9 @@ fn probe_workdir_writable(workdir: &Option<std::path::PathBuf>) -> ProbeItem {
                     ProbeStatus::Missing,
                     json!({ "path": p.display().to_string(), "writable": false }),
                     "probe.workdirWritable.missing".to_string(),
-                    Some(FixAction::OpenHomeDir),
+                    Some(FixAction::CreateWorkdir {
+                        path: p.display().to_string(),
+                    }),
                 )
             } else {
                 let writable = check_writable(p);
@@ -103,11 +105,7 @@ fn probe_workdir_writable(workdir: &Option<std::path::PathBuf>) -> ProbeItem {
                 } else {
                     "probe.workdirWritable.red"
                 };
-                let fix = if writable {
-                    None
-                } else {
-                    Some(FixAction::OpenHomeDir)
-                };
+                let fix = if writable { None } else { None };
                 (
                     status,
                     json!({ "path": p.display().to_string(), "writable": writable }),
@@ -188,7 +186,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&bogus);
         let it = probe_workdir_exists(&Some(bogus));
         assert_eq!(it.status, ProbeStatus::Missing);
-        assert!(matches!(it.fix_action, Some(FixAction::OpenHomeDir)));
+        assert!(matches!(
+            it.fix_action,
+            Some(FixAction::CreateWorkdir { .. })
+        ));
     }
 
     #[test]

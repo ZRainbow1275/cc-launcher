@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 
+use crate::services::installer::InstallerSourceConfig;
 use crate::services::probe::{env as env_probe, fix_actions, network, runtime, system, workdir};
 use crate::types::{LocalizedString, TypedError};
 
@@ -43,6 +44,10 @@ pub enum ProbeGroup {
 
 /// Single one-click fix action attached to a [`ProbeItem`].
 ///
+/// Auto-fixability is intentionally narrower than "has side effects":
+/// `OpenHomeDir`, `InjectPathEntries`, and `ExternalLink` require a separate
+/// manual step, so they must not be offered as bulk repairs.
+///
 /// Variants with side effects (`InstallNode` / `InstallGit` /
 /// `CleanEnvVar` / `InjectPathEntries`) are considered auto-fixable.
 /// `OpenHomeDir` is informational/educational but harmless so it is also
@@ -60,6 +65,7 @@ pub enum FixAction {
     InstallNode { target_lts_major: u8 },
     InstallGit,
     CleanEnvVar { var_name: String },
+    CreateWorkdir { path: String },
     OpenHomeDir,
     InjectPathEntries { entries: Vec<String> },
     ExternalLink { url: String, label_key: String },
@@ -147,6 +153,7 @@ pub fn fix_id_for(action: &FixAction) -> String {
         }
         FixAction::InstallGit => "fix-installGit".to_string(),
         FixAction::CleanEnvVar { var_name } => format!("fix-cleanEnvVar-{var_name}"),
+        FixAction::CreateWorkdir { .. } => "fix-createWorkdir".to_string(),
         FixAction::OpenHomeDir => "fix-openHomeDir".to_string(),
         FixAction::InjectPathEntries { .. } => "fix-injectPathEntries".to_string(),
         FixAction::ExternalLink { label_key, .. } => format!("fix-externalLink-{label_key}"),
@@ -162,6 +169,8 @@ pub fn is_auto_fixable(item: &ProbeItem) -> bool {
     match &item.fix_action {
         None => false,
         Some(FixAction::ExternalLink { .. }) => false,
+        Some(FixAction::OpenHomeDir) => false,
+        Some(FixAction::InjectPathEntries { .. }) => false,
         Some(_) => true,
     }
 }
@@ -237,28 +246,29 @@ fn localize_key(key: &str) -> LocalizedString {
 /// Apply a [`FixAction`] and stream [`FixProgress`] events on the returned
 /// channel. The receiver is closed when the action terminates (either
 /// `Completed` or `Failed`).
-pub fn apply_fix(action: FixAction) -> mpsc::UnboundedReceiver<FixProgress> {
+pub fn apply_fix(
+    action: FixAction,
+    source_config: InstallerSourceConfig,
+) -> mpsc::UnboundedReceiver<FixProgress> {
     let (tx, rx) = mpsc::unbounded_channel();
     let fix_id = fix_id_for(&action);
 
     tokio::spawn(async move {
-        let send = |phase: FixPhase,
-                    message_key: &str,
-                    percent: Option<u8>,
-                    error: Option<TypedError>| {
-            let _ = tx.send(FixProgress {
-                fix_id: fix_id.clone(),
-                phase,
-                message: localize_key(message_key),
-                percent,
-                error,
-            });
-        };
+        let send =
+            |phase: FixPhase, message_key: &str, percent: Option<u8>, error: Option<TypedError>| {
+                let _ = tx.send(FixProgress {
+                    fix_id: fix_id.clone(),
+                    phase,
+                    message: localize_key(message_key),
+                    percent,
+                    error,
+                });
+            };
 
         send(FixPhase::Starting, "fix.starting", Some(5), None);
         send(FixPhase::Running, "fix.running", Some(50), None);
 
-        let outcome = fix_actions::apply(&action).await;
+        let outcome = fix_actions::apply(&action, source_config).await;
 
         match outcome {
             Ok(()) => {
@@ -351,6 +361,12 @@ mod tests {
             }),
             "fix-cleanEnvVar-ANTHROPIC_API_KEY"
         );
+        assert_eq!(
+            fix_id_for(&FixAction::CreateWorkdir {
+                path: "/tmp/cc-launcher-projects".into()
+            }),
+            "fix-createWorkdir"
+        );
         assert_eq!(fix_id_for(&FixAction::OpenHomeDir), "fix-openHomeDir");
         assert_eq!(
             fix_id_for(&FixAction::InjectPathEntries { entries: vec![] }),
@@ -411,6 +427,20 @@ mod tests {
             group: ProbeGroup::Runtime,
         };
         assert!(is_auto_fixable(&it));
+
+        let it = ProbeItem {
+            id: "workdirExists".into(),
+            name_key: "probe.workdirExists.name".into(),
+            status: ProbeStatus::Missing,
+            value: serde_json::Value::Null,
+            message_key: "probe.workdirExists.missing".into(),
+            fix_action: Some(FixAction::CreateWorkdir {
+                path: "/tmp/cc-launcher-projects".into(),
+            }),
+            elapsed_ms: 0,
+            group: ProbeGroup::Workdir,
+        };
+        assert!(is_auto_fixable(&it));
     }
 
     #[test]
@@ -426,6 +456,35 @@ mod tests {
             group: ProbeGroup::System,
         };
         assert!(!is_auto_fixable(&it));
+    }
+
+    #[test]
+    fn is_auto_fixable_excludes_informational_actions() {
+        let open_home = ProbeItem {
+            id: "disk".into(),
+            name_key: "probe.disk.name".into(),
+            status: ProbeStatus::Red,
+            value: serde_json::Value::Null,
+            message_key: "probe.disk.red".into(),
+            fix_action: Some(FixAction::OpenHomeDir),
+            elapsed_ms: 0,
+            group: ProbeGroup::System,
+        };
+        assert!(!is_auto_fixable(&open_home));
+
+        let inject_path = ProbeItem {
+            id: "path".into(),
+            name_key: "probe.path.name".into(),
+            status: ProbeStatus::Red,
+            value: serde_json::Value::Null,
+            message_key: "probe.path.red".into(),
+            fix_action: Some(FixAction::InjectPathEntries {
+                entries: vec!["node".into()],
+            }),
+            elapsed_ms: 0,
+            group: ProbeGroup::Runtime,
+        };
+        assert!(!is_auto_fixable(&inject_path));
     }
 
     #[tokio::test]

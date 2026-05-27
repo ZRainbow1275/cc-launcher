@@ -129,9 +129,10 @@ async fn wire_safety_summary_round_trip_has_camelcase_keys_and_active_redlines()
         .and_then(|v| v.as_array())
         .expect("flags must be an array");
     assert!(
-        flags
-            .iter()
-            .any(|f| f.as_str().map(|s| s.starts_with("--add-dir")).unwrap_or(false)),
+        flags.iter().any(|f| f
+            .as_str()
+            .map(|s| s.starts_with("--add-dir"))
+            .unwrap_or(false)),
         "wire `flags` must include --add-dir for Claude, got: {flags:?}"
     );
     // And must NEVER include the bypass flag by default.
@@ -163,7 +164,14 @@ fn wire_terminal_info_round_trip_has_kebab_id_and_camelcase_keys() {
     let json = serde_json::to_value(&wire).expect("serialize WireTerminalInfo");
     let obj = json.as_object().expect("JSON object");
 
-    for key in ["id", "kind", "displayName", "path", "installed", "isDefault"] {
+    for key in [
+        "id",
+        "kind",
+        "displayName",
+        "path",
+        "installed",
+        "isDefault",
+    ] {
         assert!(
             obj.contains_key(key),
             "WireTerminalInfo missing key `{key}`, got: {:?}",
@@ -229,9 +237,7 @@ fn typed_error_codes_match_i18n_fixture_constants() {
             "CLI_MISSING",
         ),
         (
-            LauncherError::ProfileInvalid {
-                reason: "x".into(),
-            },
+            LauncherError::ProfileInvalid { reason: "x".into() },
             "PROFILE_NOT_FOUND",
         ),
         (LauncherError::TerminalNotFound, "NO_TERMINAL_AVAILABLE"),
@@ -325,14 +331,20 @@ fn wire_launch_result_failure_envelope_shape() {
         .get("error")
         .and_then(|v| v.as_object())
         .expect("error must be an object");
-    assert_eq!(err.get("code").and_then(|v| v.as_str()), Some("PROFILE_NOT_FOUND"));
+    assert_eq!(
+        err.get("code").and_then(|v| v.as_str()),
+        Some("PROFILE_NOT_FOUND")
+    );
     let msg = err
         .get("message")
         .and_then(|v| v.as_object())
         .expect("error.message must be a LocalizedString object");
     for lang in ["zh", "en", "ja"] {
         assert!(
-            msg.get(lang).and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false),
+            msg.get(lang)
+                .and_then(|v| v.as_str())
+                .map(|s| !s.is_empty())
+                .unwrap_or(false),
             "error.message.{lang} must be non-empty"
         );
     }

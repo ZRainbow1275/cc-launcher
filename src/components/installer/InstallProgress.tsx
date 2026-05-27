@@ -115,6 +115,14 @@ export function InstallProgress({
                 {percent}%
               </span>
             </div>
+            {last.registry ? (
+              <p
+                className="text-[11px] text-muted-foreground font-mono"
+                data-testid={`install-progress-${cli}-registry`}
+              >
+                {t("installer.step4.progress.source")} {last.registry}
+              </p>
+            ) : null}
             <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
               <div
                 data-testid={`install-progress-${cli}-bar`}

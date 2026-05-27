@@ -115,9 +115,13 @@ describe("FixAction", () => {
   it("discriminates on kind", () => {
     const a = FixAction.parse({ kind: "installNode", targetLtsMajor: 20 });
     expect(a.kind).toBe("installNode");
-    expect(() =>
-      FixAction.parse({ kind: "installNode" } as never),
-    ).toThrow();
+    expect(
+      FixAction.parse({
+        kind: "createWorkdir",
+        path: "C:\\Users\\you\\cc-launcher-projects",
+      }),
+    ).toMatchObject({ kind: "createWorkdir" });
+    expect(() => FixAction.parse({ kind: "installNode" } as never)).toThrow();
   });
 });
 

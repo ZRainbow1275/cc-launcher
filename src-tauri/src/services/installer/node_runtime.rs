@@ -27,8 +27,9 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
-use super::mirrors::{detect_arch, NodeDistMirror, NODE_DIST_MIRRORS};
-use super::registry_probe::{RegistryProbeError, RegistryProbeService};
+use super::mirrors::{detect_arch, NodeDistMirror};
+use super::registry_probe::RegistryProbeError;
+use super::source_config::{node_dist_mirror_chain, InstallerSourceConfig, MirrorEndpoint};
 
 /// Frontend-facing `NodeStatus` (camelCase JSON).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,16 +140,28 @@ impl NodeRuntime {
         Ok(Self::runtime_root()?.join("node"))
     }
 
-    /// Path to the private node binary.
-    pub fn node_binary() -> Result<PathBuf, NodeRuntimeError> {
+    /// Directory that must be prepended to PATH for npm shims to find `node`.
+    pub fn node_bin_dir() -> Result<PathBuf, NodeRuntimeError> {
         let dir = Self::node_dir()?;
         #[cfg(target_os = "windows")]
         {
-            Ok(dir.join("node.exe"))
+            Ok(dir)
         }
         #[cfg(not(target_os = "windows"))]
         {
-            Ok(dir.join("bin").join("node"))
+            Ok(dir.join("bin"))
+        }
+    }
+
+    /// Path to the private node binary.
+    pub fn node_binary() -> Result<PathBuf, NodeRuntimeError> {
+        #[cfg(target_os = "windows")]
+        {
+            Ok(Self::node_bin_dir()?.join("node.exe"))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Ok(Self::node_bin_dir()?.join("node"))
         }
     }
 
@@ -225,7 +238,17 @@ impl NodeRuntime {
     /// Streaming install. `on_progress` receives the `InstallProgress` events.
     ///
     /// This is the *core* function. Outer commands (Tauri) wrap a `Channel` over it.
-    pub async fn install<F>(mut on_progress: F) -> Result<NodeStatus, NodeRuntimeError>
+    pub async fn install<F>(on_progress: F) -> Result<NodeStatus, NodeRuntimeError>
+    where
+        F: FnMut(InstallProgress) + Send,
+    {
+        Self::install_with_config(InstallerSourceConfig::default(), on_progress).await
+    }
+
+    pub async fn install_with_config<F>(
+        source_config: InstallerSourceConfig,
+        mut on_progress: F,
+    ) -> Result<NodeStatus, NodeRuntimeError>
     where
         F: FnMut(InstallProgress) + Send,
     {
@@ -234,20 +257,15 @@ impl NodeRuntime {
             InstallPhase::ProbingRegistry,
             l(
                 "正在选择镜像源...",
-                "Probing npm registries...",
-                "npm レジストリを探索中...",
+                "Probing Node.js distribution mirrors...",
+                "Node.js 配布ミラーを確認中...",
             ),
             Some(5),
             None,
             None,
         ));
 
-        // Node dist mirrors aren't on npm — we use the official site directly here.
-        // (Smart-mirror for the Node binary itself is a future polish; npm mirror still
-        // picked so the same pick can be reused for CLI install.)
-        let pick = RegistryProbeService::smart_pick(false).await?;
-        let chosen_registry = pick.chosen.clone();
-
+        // Node installation is independent from npm registry reachability.
         // Phase 2: installing-node — download + verify + extract.
         on_progress(progress(
             InstallPhase::InstallingNode,
@@ -257,7 +275,7 @@ impl NodeRuntime {
                 "Node.js 20 LTS をダウンロード中...",
             ),
             Some(20),
-            Some(chosen_registry.clone()),
+            None,
             None,
         ));
 
@@ -274,7 +292,8 @@ impl NodeRuntime {
             cleanup_dir(&target_dir);
         }
 
-        let install_result = Self::run_install_pipeline(&target_dir, &mut on_progress).await;
+        let install_result =
+            Self::run_install_pipeline(&target_dir, &source_config, &mut on_progress).await;
 
         if let Err(ref err) = install_result {
             // Failure → cleanup partial + emit failed event.
@@ -287,7 +306,7 @@ impl NodeRuntime {
                     "Node.js のインストールに失敗しました。残骸を削除しました",
                 ),
                 Some(0),
-                Some(chosen_registry.clone()),
+                None,
                 Some(TypedError {
                     code: "NODE_INSTALL_FAILED".to_string(),
                     message: l(
@@ -311,7 +330,7 @@ impl NodeRuntime {
                 "Node.js を検証中...",
             ),
             Some(90),
-            Some(chosen_registry.clone()),
+            None,
             None,
         ));
 
@@ -333,7 +352,7 @@ impl NodeRuntime {
             InstallPhase::Completed,
             l("安装完成", "Installation completed", "インストール完了"),
             Some(100),
-            Some(chosen_registry),
+            None,
             None,
         ));
 
@@ -348,13 +367,15 @@ impl NodeRuntime {
 
     async fn run_install_pipeline<F>(
         target_dir: &Path,
+        source_config: &InstallerSourceConfig,
         on_progress: &mut F,
     ) -> Result<String, NodeRuntimeError>
     where
         F: FnMut(InstallProgress) + Send,
     {
+        let mirrors = node_dist_mirror_chain(source_config);
         // 1. Resolve latest Node 20 LTS version (tries each mirror; logs winner).
-        let version = resolve_latest_v20(on_progress).await?;
+        let version = resolve_latest_v20(on_progress, &mirrors).await?;
 
         // 2. Compute archive name once (arch-aware via detect_arch()).
         let archive_name = node_archive_name(&version)?;
@@ -371,10 +392,10 @@ impl NodeRuntime {
         let archive_path = tmp_dir.path().join(&archive_name);
 
         let mut last_err: Option<NodeRuntimeError> = None;
-        let mut chosen_mirror: Option<&'static str> = None;
+        let mut chosen_mirror: Option<String> = None;
         let mut shasums_text: Option<String> = None;
 
-        for (idx, mirror) in NODE_DIST_MIRRORS.iter().enumerate() {
+        for (idx, mirror) in mirrors.iter().enumerate() {
             // Clean any leftover from previous mirror attempt.
             if archive_path.exists() {
                 if let Err(e) = std::fs::remove_file(&archive_path) {
@@ -406,11 +427,7 @@ impl NodeRuntime {
             match download_to(&archive_url, &archive_path).await {
                 Ok(()) => {}
                 Err(e) => {
-                    log::warn!(
-                        "archive download from mirror {} failed: {}",
-                        mirror.name,
-                        e
-                    );
+                    log::warn!("archive download from mirror {} failed: {}", mirror.name, e);
                     last_err = Some(e);
                     continue;
                 }
@@ -421,16 +438,12 @@ impl NodeRuntime {
             match fetch_text(&shasum_url).await {
                 Ok(s) => {
                     shasums_text = Some(s);
-                    chosen_mirror = Some(mirror.name);
+                    chosen_mirror = Some(mirror.name.clone());
                     log::info!("Node archive + SHASUMS from mirror: {}", mirror.name);
                     break;
                 }
                 Err(e) => {
-                    log::warn!(
-                        "SHASUMS download from mirror {} failed: {}",
-                        mirror.name,
-                        e
-                    );
+                    log::warn!("SHASUMS download from mirror {} failed: {}", mirror.name, e);
                     last_err = Some(e);
                     continue;
                 }
@@ -444,7 +457,7 @@ impl NodeRuntime {
                 )
             })
         })?;
-        let mirror_name = chosen_mirror.unwrap_or("unknown");
+        let mirror_name = chosen_mirror.unwrap_or_else(|| "unknown".to_string());
 
         // 4. Parse SHASUMS for our archive name and verify.
         let expected_sha = shasums
@@ -575,13 +588,16 @@ struct DistIndexEntry {
 /// first one to return a parseable `index.json` wins. Emits a progress event
 /// when falling back to an alternate mirror so the UI tells the user why
 /// the install is "taking longer than usual".
-async fn resolve_latest_v20<F>(on_progress: &mut F) -> Result<String, NodeRuntimeError>
+async fn resolve_latest_v20<F>(
+    on_progress: &mut F,
+    mirrors: &[MirrorEndpoint],
+) -> Result<String, NodeRuntimeError>
 where
     F: FnMut(InstallProgress) + Send,
 {
     let mut last_err: Option<NodeRuntimeError> = None;
 
-    for (idx, mirror) in NODE_DIST_MIRRORS.iter().enumerate() {
+    for (idx, mirror) in mirrors.iter().enumerate() {
         if idx > 0 {
             on_progress(progress(
                 InstallPhase::ProbingRegistry,
@@ -591,7 +607,7 @@ where
                     &format!("代替ミラーを試行中: {}", mirror.name),
                 ),
                 Some(10),
-                Some(mirror.name.to_string()),
+                Some(mirror.name.clone()),
                 None,
             ));
         }
@@ -657,7 +673,7 @@ fn node_archive_name(version: &str) -> Result<String, NodeRuntimeError> {
 #[allow(dead_code)]
 fn node_archive_url(version: &str) -> Result<(String, String), NodeRuntimeError> {
     let name = node_archive_name(version)?;
-    let mirror: &NodeDistMirror = NODE_DIST_MIRRORS
+    let mirror: &NodeDistMirror = super::mirrors::NODE_DIST_MIRRORS
         .first()
         .expect("NODE_DIST_MIRRORS must not be empty");
     let url = mirror.archive_url(version, &name);
@@ -823,6 +839,7 @@ fn single_root_dir(parent: &Path) -> Result<PathBuf, NodeRuntimeError> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::mirrors::NODE_DIST_MIRRORS;
     use super::*;
 
     #[test]

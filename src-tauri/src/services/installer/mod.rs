@@ -14,6 +14,7 @@ pub mod node_runtime;
 #[cfg(target_os = "windows")]
 pub mod portable_git;
 pub mod registry_probe;
+pub mod source_config;
 
 // Re-exports kept for the top-level `services::installer::*` ergonomics.
 // Marked `#[allow(unused_imports)]` because consumers may pin to a deeper path.
@@ -27,3 +28,8 @@ pub use mirrors::{
 pub use node_runtime::NodeRuntime;
 #[allow(unused_imports)]
 pub use registry_probe::{RegistryProbeService, REGISTRY_DEFS};
+#[allow(unused_imports)]
+pub use source_config::{
+    git_for_windows_mirror_chain, node_dist_mirror_chain, registry_endpoint_chain,
+    InstallerSourceConfig, InstallerSourceConfigError, MirrorEndpoint, CUSTOM_SOURCE_NAME,
+};
