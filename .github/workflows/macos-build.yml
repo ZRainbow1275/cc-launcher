@@ -7,17 +7,131 @@ on:
         description: "Artifact version label, for example v3.15.0-test1"
         required: false
         default: "manual"
+      signing_mode:
+        description: "Use unsigned-test for functional testing, signed-notarized for release validation"
+        required: true
+        type: choice
+        default: "unsigned-test"
+        options:
+          - unsigned-test
+          - signed-notarized
 
 permissions:
   contents: read
 
 concurrency:
-  group: macos-build-${{ github.ref_name }}
+  group: macos-build-${{ github.ref_name }}-${{ inputs.signing_mode }}
   cancel-in-progress: true
 
 jobs:
-  build-macos:
-    name: Build signed macOS artifacts
+  build-macos-unsigned:
+    if: ${{ inputs.signing_mode == 'unsigned-test' }}
+    name: Build unsigned macOS test artifacts
+    runs-on: macos-14
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.12.3
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add macOS targets
+        shell: bash
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Build unsigned universal macOS app
+        shell: bash
+        timeout-minutes: 60
+        run: pnpm tauri build --target universal-apple-darwin --config src-tauri/tauri.package.conf.json
+
+      - name: Prepare unsigned macOS artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+
+          VERSION_LABEL="${{ inputs.version_label }}"
+          VERSION_LABEL="${VERSION_LABEL//\//-}"
+          VERSION_LABEL="${VERSION_LABEL// /-}"
+          MODE="unsigned"
+
+          APP_PATH=""
+          for path in \
+            "src-tauri/target/universal-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/aarch64-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/x86_64-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/release/bundle/macos"; do
+            if [ -d "$path" ]; then
+              [ -z "$APP_PATH" ] && APP_PATH=$(find "$path" -maxdepth 1 -name "*.app" -type d | head -1 || true)
+            fi
+          done
+
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found after Tauri build." >&2
+            exit 1
+          fi
+
+          ZIP_STAGE_DIR="$RUNNER_TEMP/zip-stage"
+          rm -rf "$ZIP_STAGE_DIR"
+          mkdir -p "$ZIP_STAGE_DIR"
+          ditto "$APP_PATH" "$ZIP_STAGE_DIR/CC Launcher.app"
+          ditto -c -k --sequesterRsrc --keepParent "$ZIP_STAGE_DIR/CC Launcher.app" \
+            "release-assets/CC-Launcher-${VERSION_LABEL}-macOS-${MODE}.zip"
+          rm -rf "$ZIP_STAGE_DIR"
+
+          DMG_STAGE_DIR="$RUNNER_TEMP/dmg-stage"
+          rm -rf "$DMG_STAGE_DIR"
+          mkdir -p "$DMG_STAGE_DIR"
+          ditto "$APP_PATH" "$DMG_STAGE_DIR/CC Launcher.app"
+          hdiutil create \
+            -volname "CC Launcher" \
+            -srcfolder "$DMG_STAGE_DIR" \
+            -ov \
+            -format UDZO \
+            "release-assets/CC-Launcher-${VERSION_LABEL}-macOS-${MODE}.dmg"
+          rm -rf "$DMG_STAGE_DIR"
+
+          find release-assets -maxdepth 1 -type f -print
+
+      - name: Upload unsigned macOS artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: CC-Launcher-macos-${{ inputs.version_label }}-unsigned
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  build-macos-signed:
+    if: ${{ inputs.signing_mode == 'signed-notarized' }}
+    name: Build signed and notarized macOS artifacts
     runs-on: macos-14
     environment: macos-release
     timeout-minutes: 90
@@ -173,7 +287,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm tauri build --target universal-apple-darwin
 
-      - name: Prepare macOS artifacts
+      - name: Prepare signed macOS artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -286,10 +400,10 @@ jobs:
           spctl -a -t open --context context:primary-signature -vv "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
 
-      - name: Upload macOS artifacts
+      - name: Upload signed macOS artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: CC-Launcher-macos-${{ inputs.version_label }}
+          name: CC-Launcher-macos-${{ inputs.version_label }}-signed
           path: release-assets/*
           if-no-files-found: error
           retention-days: 14

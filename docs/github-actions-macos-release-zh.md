@@ -3,6 +3,15 @@
 > 这份说明用于把仓库里的 macOS 打包流程真正跑起来。
 > 对应的工作流文件是 `.github/workflows/macos-build.yml`，发布流程还会复用 `.github/workflows/release.yml` 里的 macOS 规则。
 
+## 两种构建模式
+
+手动运行 `.github/workflows/macos-build.yml` 时有一个 `signing_mode` 选项：
+
+- `unsigned-test`：默认值。不需要 Apple 证书、不需要 `macos-release` secrets，用于先产出 macOS 测试包验证功能链路。
+- `signed-notarized`：正式签名 + 公证流程。需要下面的 `macos-release` Environment secrets。
+
+`unsigned-test` 产物可以用于功能测试，但不是正式分发包。macOS 可能提示来源不明；测试时可以右键打开，或在确认来源可信后手动移除 quarantine 属性。正式给用户分发时必须使用 `signed-notarized`。
+
 ## 环境名
 
 在 GitHub 仓库里创建一个 Environment，名称固定为：
@@ -15,7 +24,7 @@ macos-release
 
 ## 需要配置的 Secrets
 
-把下面这些 secret 加到 `macos-release` 这个 Environment 里：
+只有运行 `signed-notarized` 时才需要把下面这些 secret 加到 `macos-release` 这个 Environment 里：
 
 - `APPLE_CERTIFICATE`
 - `APPLE_CERTIFICATE_PASSWORD`
@@ -42,12 +51,13 @@ macos-release
 
 ## 触发方式
 
-- 手动构建 macOS 包：运行 `.github/workflows/macos-build.yml`
+- 手动构建 macOS 测试包：运行 `.github/workflows/macos-build.yml`，`signing_mode` 选择 `unsigned-test`
+- 手动构建签名/公证包：运行 `.github/workflows/macos-build.yml`，`signing_mode` 选择 `signed-notarized`
 - 打 tag 发布：走 `.github/workflows/release.yml`
 
 ## 产物命名
 
-macOS 构建会产出以下文件名风格：
+macOS 签名构建会产出以下文件名风格：
 
 - `CC-Launcher-<version>-macOS.dmg`
 - `CC-Launcher-<version>-macOS.zip`
@@ -55,9 +65,23 @@ macOS 构建会产出以下文件名风格：
 
 其中 `.dmg` 是推荐分发包，`.zip` 方便解压即用，`.tar.gz` 是 updater 用的更新产物。
 
+macOS 无签名测试构建会产出以下文件名风格：
+
+- `CC-Launcher-<version>-macOS-unsigned.dmg`
+- `CC-Launcher-<version>-macOS-unsigned.zip`
+
+无签名测试构建使用 `src-tauri/tauri.package.conf.json`，不会生成 updater 签名产物。
+
 ## 失败时先看什么
 
-如果 workflow 失败，优先检查：
+如果 `unsigned-test` 失败，优先检查：
+
+1. `pnpm install --frozen-lockfile` 是否失败
+2. macOS runner 是否能成功安装 Rust target
+3. `pnpm tauri build --target universal-apple-darwin --config src-tauri/tauri.package.conf.json` 是否失败
+4. 产物里是否生成了 `CC Launcher.app`
+
+如果 `signed-notarized` 失败，优先检查：
 
 1. `macos-release` Environment 是否真的有这些 secret
 2. Apple 证书和签名私钥格式是否正确
