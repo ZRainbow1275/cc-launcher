@@ -1244,6 +1244,26 @@ mod tests {
     }
 
     #[test]
+    fn powershell_terminal_wraps_cli_with_absolute_path_and_private_prefix() {
+        let cmd = build_terminal_command(
+            &TerminalKind::PowerShell,
+            Path::new("C:/Users/test/work"),
+            &["C:/runtime/claude/claude.cmd".into(), "--model".into()],
+            Some("C:/runtime/claude;C:/runtime/node"),
+        );
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(cmd.get_program().to_string_lossy(), "powershell.exe");
+        assert!(args.iter().any(|arg| arg == "-NoExit"));
+        let script = args.last().expect("script arg");
+        assert!(script.contains("$env:Path = 'C:/runtime/claude;C:/runtime/node' + [System.IO.Path]::PathSeparator + $env:Path; "));
+        assert!(script.contains("Set-Location -LiteralPath 'C:/Users/test/work'; & 'C:/runtime/claude/claude.cmd' '--model'"));
+    }
+
+    #[test]
     fn terminal_stdio_policy_matches_platform_console_model() {
         assert_eq!(
             windows_terminal_stdio_uses_console_handles(),

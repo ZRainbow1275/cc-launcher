@@ -113,6 +113,8 @@ pub enum CliInstallError {
     NpmFailed { exit_code: i32, stderr_tail: String },
     #[error("npm registry fetch failed: {0}")]
     RegistryFetch(String),
+    #[error("environment error: {0}")]
+    Env(String),
     #[error("post-install validation failed: {0}")]
     Validation(String),
     #[error("rollback failed: {0}")]
@@ -440,6 +442,7 @@ impl CliInstaller {
             .arg("--loglevel=error")
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
+        cmd.env(path_env_key(), private_node_path_env_value()?);
 
         #[cfg(target_os = "windows")]
         {
@@ -788,6 +791,29 @@ async fn download_npm_tarball(
     }))
 }
 
+fn private_node_path_env_value() -> Result<String, CliInstallError> {
+    let node_bin_dir = NodeRuntime::node_bin_dir()?;
+    let mut entries = vec![node_bin_dir];
+    let base_path = std::env::var_os(path_env_key()).or_else(|| std::env::var_os("PATH"));
+    if let Some(base) = base_path {
+        entries.extend(std::env::split_paths(&base));
+    }
+    let joined = std::env::join_paths(entries.iter().map(|p| p.as_os_str()))
+        .map_err(|e| CliInstallError::Env(format!("compose npm PATH: {e}")))?;
+    Ok(joined.to_string_lossy().into_owned())
+}
+
+fn path_env_key() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "Path"
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        "PATH"
+    }
+}
+
 fn progress(
     phase: InstallPhase,
     message: LocalizedMessage,
@@ -1023,6 +1049,28 @@ mod tests {
         let cache_arg = format!("--cache={}", root.join("npm-cache").display());
         assert!(cache_arg.starts_with("--cache="));
         assert!(cache_arg.contains("npm-cache"));
+        std::env::remove_var("CC_SWITCH_TEST_HOME");
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn private_node_path_env_value_prepends_node_bin_dir() {
+        std::env::set_var("CC_SWITCH_TEST_HOME", std::env::temp_dir());
+        let original_path = std::env::var_os("PATH");
+        std::env::set_var("PATH", "host-bin");
+
+        let value = private_node_path_env_value().expect("private node PATH composes");
+        let split: Vec<String> = std::env::split_paths(&std::ffi::OsString::from(value))
+            .map(|p| p.display().to_string())
+            .collect();
+        let node_bin = NodeRuntime::node_bin_dir().expect("node_bin_dir resolves");
+        assert_eq!(split[0], node_bin.display().to_string());
+        assert_eq!(split[1], "host-bin");
+
+        match original_path {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
         std::env::remove_var("CC_SWITCH_TEST_HOME");
     }
 }
