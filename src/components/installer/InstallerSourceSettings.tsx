@@ -210,6 +210,27 @@ export function InstallerSourceSettings({
           </p>
         ) : null}
 
+        {query.data?.npmRegistry ? (
+          <div
+            className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs dark:border-emerald-900/60 dark:bg-emerald-950/30"
+            data-testid="installer-source-active-npm"
+          >
+            <span className="font-medium">
+              {t("installer.source.activeNpmRegistry")}
+            </span>{" "}
+            <span className="font-mono break-all">
+              {query.data.npmRegistry}
+            </span>
+          </div>
+        ) : (
+          <div
+            className="rounded-md border border-border-default bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="installer-source-default-npm"
+          >
+            {t("installer.source.defaultNpmRegistry")}
+          </div>
+        )}
+
         <div className="flex flex-wrap justify-end gap-2">
           <Button
             type="button"

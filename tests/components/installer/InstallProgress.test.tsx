@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import i18n from "i18next";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InstallProgress } from "@/components/installer/InstallProgress";
 import type { InstallProgress as InstallProgressEvent } from "@/lib/api/contracts";
@@ -16,6 +17,10 @@ function evt(
 }
 
 describe("InstallProgress", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("zh");
+  });
+
   it("renders streaming phases in order and shows the latest phase + bar", () => {
     const events: InstallProgressEvent[] = [
       evt("probing-registry", 5),
@@ -99,6 +104,83 @@ describe("InstallProgress", () => {
       screen.getByTestId("install-progress-claude-retry-different"),
     );
     expect(onRetryDifferent).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders localized backend progress messages using the active language", async () => {
+    await i18n.changeLanguage("en");
+    const events: InstallProgressEvent[] = [
+      {
+        phase: "installing-cli",
+        message: {
+          zh: "正在安装 CLI...",
+          en: "Installing CLI...",
+          ja: "CLI をインストール中...",
+        },
+        percent: 60,
+      },
+    ];
+
+    render(
+      <InstallProgress
+        cli="claude"
+        events={events}
+        isStreaming={true}
+        onCancel={vi.fn()}
+        onRetrySameMirror={vi.fn()}
+        onRetryDifferentMirror={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Installing CLI...")).toBeInTheDocument();
+    expect(screen.queryByText("正在安装 CLI...")).toBeNull();
+  });
+
+  it("shows the backend error code, cause, and attempted registry on failure", () => {
+    const events: InstallProgressEvent[] = [
+      {
+        phase: "installing-cli",
+        message: { zh: "msg", en: "msg", ja: "msg" },
+        percent: 60,
+        registry: "https://vps.example.com/npm",
+      },
+      {
+        phase: "failed",
+        message: { zh: "failed", en: "failed", ja: "failed" },
+        percent: 0,
+        registry: "https://vps.example.com/npm",
+        error: {
+          code: "CLI_INSTALL_FAILED",
+          message: {
+            zh: "CLI 安装失败",
+            en: "CLI installation failed",
+            ja: "CLI のインストールに失敗しました",
+          },
+          cause: "npm install failed (exit 1): fetch failed",
+          retryable: true,
+        },
+      },
+    ];
+
+    render(
+      <InstallProgress
+        cli="claude"
+        events={events}
+        isStreaming={false}
+        onCancel={vi.fn()}
+        onRetrySameMirror={vi.fn()}
+        onRetryDifferentMirror={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("install-progress-claude-error-code"),
+    ).toHaveTextContent("CLI_INSTALL_FAILED");
+    expect(
+      screen.getByTestId("install-progress-claude-error-cause"),
+    ).toHaveTextContent("fetch failed");
+    expect(
+      screen.getByTestId("install-progress-claude-registry"),
+    ).toHaveTextContent("https://vps.example.com/npm");
   });
 
   it("shows a success block with version when phase is completed", () => {

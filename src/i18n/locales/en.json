@@ -2990,6 +2990,11 @@
   "shell": {
     "brandTagline": "Agent CLI Launcher",
     "launcherEntry": "Launcher",
+    "locale": {
+      "title": "Display language",
+      "switchTo": "Switch to {{locale}}",
+      "switchFailed": "Failed to switch language"
+    },
     "nav": {
       "home": "Launcher",
       "install": "Install",
@@ -3323,6 +3328,8 @@
       "reset": "Restore defaults",
       "resetDone": "Default installer sources restored",
       "resetFailed": "Failed to restore default installer sources",
+      "activeNpmRegistry": "Current npm source:",
+      "defaultNpmRegistry": "No private npm source configured. Installs use the auto-probed public source.",
       "invalidUrl": "Enter a valid http:// or https:// URL"
     },
     "step4": {
@@ -3340,6 +3347,7 @@
         "note": "Tencent mirror returns 404 on root in some environments; auto-skipped",
         "select": "Use this source",
         "confirmSelection": "Continue with selected mirror",
+        "currentSource": "npm source used for this install",
         "rowFailed": "Failed",
         "rowTimeout": "Timeout",
         "rowOk": "OK",
@@ -3348,6 +3356,10 @@
       "progress": {
         "phase": "Phase",
         "source": "Source:",
+        "attemptedSource": "Attempted source",
+        "errorCode": "Error code",
+        "errorMessage": "Error message",
+        "errorCause": "Raw output",
         "speed": "{{kbps}} KB/s",
         "bytes": "{{loaded}} / {{total}} KB",
         "cancel": "Cancel",

@@ -48,6 +48,42 @@ interface PerCliState {
   attemptedRegistry?: string;
 }
 
+function stringifyInstallError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function syntheticInstallFailureEvent(
+  registry: string,
+  cause: string,
+): InstallProgressEvent {
+  return {
+    phase: "failed",
+    message: {
+      zh: "安装失败，未收到后端失败事件",
+      en: "Install failed before the backend delivered a failure event",
+      ja: "バックエンドの失敗イベント到着前にインストールが失敗しました",
+    },
+    percent: 0,
+    registry,
+    error: {
+      code: "INSTALL_STREAM_REJECTED",
+      message: {
+        zh: "安装通道异常中断",
+        en: "Install stream ended with an error",
+        ja: "インストールストリームがエラーで終了しました",
+      },
+      cause,
+      retryable: true,
+    },
+  };
+}
+
 function emptyCliState(): PerCliState {
   return {
     events: [],
@@ -218,8 +254,17 @@ export function InstallerWizard({
           lastPhase = evt.phase;
           updatePerCli(cli, { events: [...collected] });
         }
-      } catch {
-        updatePerCli(cli, { failed: true, isStreaming: false });
+      } catch (error: unknown) {
+        const failedEvent = syntheticInstallFailureEvent(
+          registry,
+          stringifyInstallError(error),
+        );
+        collected.push(failedEvent);
+        updatePerCli(cli, {
+          events: [...collected],
+          failed: true,
+          isStreaming: false,
+        });
         return;
       }
       const completed = lastPhase === "completed";
@@ -572,6 +617,16 @@ export function InstallerWizard({
             selectedUrl={chosenRegistry}
             onSelect={(url) => setChosenRegistry(url)}
           />
+          {chosenRegistry ? (
+            <Alert data-testid="installer-step-4-selected-source">
+              <AlertTitle>
+                {t("installer.step4.registryPicker.currentSource")}
+              </AlertTitle>
+              <AlertDescription className="font-mono break-all text-xs">
+                {chosenRegistry}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {chosenRegistry ? (
             <div className="flex justify-end">
               <Button

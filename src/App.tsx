@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  type CSSProperties,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -97,7 +104,8 @@ import { LauncherPanel } from "@/components/launcher";
 import { SystemCheckDashboard } from "@/components/system-check";
 import { SandboxSettings } from "@/components/sandbox/SandboxSettings";
 import { LauncherHomePage } from "@/components/launcher-home";
-import { onboarding } from "@/lib/api/mock";
+import { onboarding, settings as launcherSettings } from "@/lib/api/mock";
+import type { Locale } from "@/lib/api/contracts";
 
 type View =
   | "providers"
@@ -302,6 +310,67 @@ const getInitialView = (): View => {
   return "providers";
 };
 
+const HEADER_LOCALES: readonly { value: Locale; label: string }[] = [
+  { value: "zh", label: "中文" },
+  { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
+];
+
+function normalizedLocale(language: string): Locale {
+  if (language.startsWith("ja")) return "ja";
+  if (language.startsWith("en")) return "en";
+  return "zh";
+}
+
+interface HeaderLocaleSwitcherProps {
+  value: Locale;
+  onChange: (value: Locale) => void;
+}
+
+function HeaderLocaleSwitcher({ value, onChange }: HeaderLocaleSwitcherProps) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t("shell.locale.title", { defaultValue: "Display language" })}
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-border-default bg-background/70 p-0.5"
+      data-testid="header-locale-switcher"
+      style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+    >
+      {HEADER_LOCALES.map((locale) => {
+        const active = locale.value === value;
+        return (
+          <Button
+            key={locale.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            size="sm"
+            variant={active ? "default" : "ghost"}
+            onClick={() => {
+              if (!active) onChange(locale.value);
+            }}
+            className={cn(
+              "h-7 px-2 text-xs",
+              active
+                ? "shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
+            )}
+            data-testid={`header-locale-${locale.value}`}
+            title={t("shell.locale.switchTo", {
+              defaultValue: `Switch to ${locale.label}`,
+              locale: locale.label,
+            })}
+          >
+            {locale.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 function App() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -313,6 +382,7 @@ function App() {
   const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
+  const currentLocale = normalizedLocale(i18n.language);
 
   // Capture the persisted-view flag SYNCHRONOUSLY at first render, before any
   // effect runs. This is what lets the launcher-first-launch redirect know
@@ -402,6 +472,25 @@ function App() {
       setCurrentView(next);
     },
     [onboardingLocked],
+  );
+
+  const handleHeaderLocaleChange = useCallback(
+    async (next: Locale) => {
+      try {
+        await launcherSettings.set_locale(next);
+        window.localStorage.setItem("language", next);
+        await i18n.changeLanguage(next);
+        void queryClient.invalidateQueries({ queryKey: ["settings"] });
+      } catch (error) {
+        console.error("[App] Failed to switch locale", error);
+        toast.error(
+          t("shell.locale.switchFailed", {
+            defaultValue: "Failed to switch language",
+          }),
+        );
+      }
+    },
+    [i18n, queryClient, t],
   );
 
   // Final-step completion: marks onboarding as done with sensible defaults
@@ -1727,6 +1816,12 @@ function App() {
           </div>
 
           <div className="flex flex-1 min-w-0 items-center justify-end gap-1.5">
+            {(isLauncherView(currentView) || currentView === "settings") && (
+              <HeaderLocaleSwitcher
+                value={currentLocale}
+                onChange={(next) => void handleHeaderLocaleChange(next)}
+              />
+            )}
             {currentView === "providers" &&
               activeApp !== "opencode" &&
               activeApp !== "openclaw" &&

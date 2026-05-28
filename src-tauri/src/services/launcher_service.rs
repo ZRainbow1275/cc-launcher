@@ -289,14 +289,10 @@ impl LauncherService {
         })?;
 
         // 11) Spawn detached.
-        let child = term_cmd
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| LauncherError::SpawnFailed {
-                message: e.to_string(),
-            })?;
+        configure_terminal_stdio(&mut term_cmd);
+        let child = term_cmd.spawn().map_err(|e| LauncherError::SpawnFailed {
+            message: e.to_string(),
+        })?;
         let pid = child.id();
 
         // 11b) Post-spawn Windows Job Object binding. No-op on *nix.
@@ -878,6 +874,25 @@ fn build_terminal_command(
     }
 }
 
+#[cfg(target_os = "windows")]
+fn configure_terminal_stdio(_cmd: &mut Command) {
+    // Do not redirect stdio on Windows terminal shells. With CREATE_NEW_CONSOLE,
+    // explicit NUL handles can leave PowerShell/cmd without interactive console
+    // handles, producing the visible "flash and close" launch failure.
+}
+
+#[cfg(not(target_os = "windows"))]
+fn configure_terminal_stdio(cmd: &mut Command) {
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+}
+
+#[cfg(test)]
+fn windows_terminal_stdio_uses_console_handles() -> bool {
+    cfg!(target_os = "windows")
+}
+
 /// Build the bash payload string. argv joined with bash single-quote escaping.
 fn bash_payload(cli_argv: &[String], path_prefix: Option<&str>) -> String {
     let mut out = String::new();
@@ -1226,6 +1241,14 @@ mod tests {
         let script = args.last().expect("script arg");
         assert!(script.contains("set \"PATH=C:/runtime/codex;C:/runtime/node;%PATH%\""));
         assert!(script.contains("\"C:/runtime/codex/codex.cmd\""));
+    }
+
+    #[test]
+    fn terminal_stdio_policy_matches_platform_console_model() {
+        assert_eq!(
+            windows_terminal_stdio_uses_console_handles(),
+            cfg!(target_os = "windows")
+        );
     }
 
     #[test]

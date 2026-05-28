@@ -6,6 +6,9 @@ import { initReactI18next } from "react-i18next";
 import { server } from "./msw/server";
 import { resetProviderState } from "./msw/state";
 import "./msw/tauriMocks";
+import en from "../src/i18n/locales/en.json";
+import ja from "../src/i18n/locales/ja.json";
+import zh from "../src/i18n/locales/zh.json";
 
 // Globally disable the App.tsx first-launch onboarding redirect by default,
 // so pre-existing tests that mount <App /> with an empty localStorage are
@@ -21,10 +24,11 @@ beforeAll(async () => {
   server.listen({ onUnhandledRequest: "warn" });
   await i18n.use(initReactI18next).init({
     lng: "zh",
-    fallbackLng: "zh",
+    fallbackLng: "en",
     resources: {
-      zh: { translation: {} },
-      en: { translation: {} },
+      zh: { translation: zh },
+      en: { translation: en },
+      ja: { translation: ja },
     },
     interpolation: {
       escapeValue: false,

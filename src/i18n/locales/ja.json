@@ -2990,6 +2990,11 @@
   "shell": {
     "brandTagline": "エージェント CLI ランチャー",
     "launcherEntry": "ランチャー",
+    "locale": {
+      "title": "表示言語",
+      "switchTo": "{{locale}} に切り替え",
+      "switchFailed": "言語の切り替えに失敗しました"
+    },
     "nav": {
       "home": "ランチャー",
       "install": "インストール",
@@ -3323,6 +3328,8 @@
       "reset": "既定値に戻す",
       "resetDone": "既定のインストール元に戻しました",
       "resetFailed": "既定のインストール元への復元に失敗しました",
+      "activeNpmRegistry": "現在の npm ソース：",
+      "defaultNpmRegistry": "プライベート npm ソースは未設定です。インストールには自動探索された公開ソースを使用します。",
       "invalidUrl": "有効な http:// または https:// URL を入力してください"
     },
     "step4": {
@@ -3340,6 +3347,7 @@
         "note": "Tencent ミラーは一部環境でルートが 404 を返すため自動的にスキップされました",
         "select": "このソースを使う",
         "confirmSelection": "選択したミラーで続行",
+        "currentSource": "今回のインストールで使用する npm ソース",
         "rowFailed": "失敗",
         "rowTimeout": "タイムアウト",
         "rowOk": "OK",
@@ -3348,6 +3356,10 @@
       "progress": {
         "phase": "フェーズ",
         "source": "ソース：",
+        "attemptedSource": "試行したソース",
+        "errorCode": "エラーコード",
+        "errorMessage": "エラーメッセージ",
+        "errorCause": "詳細出力",
         "speed": "{{kbps}} KB/s",
         "bytes": "{{loaded}} / {{total}} KB",
         "cancel": "キャンセル",

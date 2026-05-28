@@ -1,4 +1,5 @@
 import { screen, waitFor, within, act } from "@testing-library/react";
+import i18n from "i18next";
 import userEvent, {
   PointerEventsCheckLevel,
 } from "@testing-library/user-event";
@@ -362,6 +363,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+afterEach(async () => {
+  await i18n.changeLanguage("zh");
+});
+
 describe("App launcher view injection", () => {
   it("keeps the providers view as the initial view when onboarding is completed", async () => {
     const App = await loadApp();
@@ -508,6 +513,22 @@ describe("Onboarding lock (first-launch flow enforcement)", () => {
     // Rocket entry is only ever rendered inside the providers view (which we
     // can't reach while locked). It must not be present here.
     expect(screen.queryByTestId("header-rocket-entry")).not.toBeInTheDocument();
+  });
+
+  it("keeps a language switcher available inside the locked launcher flow", async () => {
+    const App = await loadApp();
+    renderWithMockIPC("new-user", <App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-system-check")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("header-locale-switcher")).toBeInTheDocument();
+    await user.click(screen.getByTestId("header-locale-en"));
+
+    await waitFor(() => {
+      expect(screen.getByText("System Check")).toBeInTheDocument();
+    });
   });
 
   it("hides the header back-arrow on launcherSystemCheck while onboarding is locked", async () => {

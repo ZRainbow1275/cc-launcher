@@ -67,5 +67,10 @@ describe("InstallerSourceSettings", () => {
         gitForWindowsMirror: "https://vps.example.com/git",
       });
     });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("installer-source-active-npm"),
+      ).toHaveTextContent("https://vps.example.com/npm");
+    });
   });
 });

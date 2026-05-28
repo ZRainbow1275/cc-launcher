@@ -2990,6 +2990,11 @@
   "shell": {
     "brandTagline": "Agent CLI 启动器",
     "launcherEntry": "启动器",
+    "locale": {
+      "title": "界面语言",
+      "switchTo": "切换到 {{locale}}",
+      "switchFailed": "切换语言失败"
+    },
     "nav": {
       "home": "启动器",
       "install": "装机",
@@ -3323,6 +3328,8 @@
       "reset": "恢复默认源",
       "resetDone": "已恢复默认安装源",
       "resetFailed": "恢复默认安装源失败",
+      "activeNpmRegistry": "当前 npm 源：",
+      "defaultNpmRegistry": "当前未配置私有 npm 源，安装会使用自动探测出的公共源。",
       "invalidUrl": "请填写有效的 http:// 或 https:// 地址"
     },
     "step4": {
@@ -3340,6 +3347,7 @@
         "note": "腾讯镜像在某些环境根路径返回 404，已自动跳过该镜像",
         "select": "选择此源",
         "confirmSelection": "使用所选镜像继续",
+        "currentSource": "本次安装将使用的 npm 源",
         "rowFailed": "失败",
         "rowTimeout": "超时",
         "rowOk": "可用",
@@ -3348,6 +3356,10 @@
       "progress": {
         "phase": "当前阶段",
         "source": "来源：",
+        "attemptedSource": "尝试源",
+        "errorCode": "错误码",
+        "errorMessage": "错误信息",
+        "errorCause": "底层输出",
         "speed": "{{kbps}} KB/s",
         "bytes": "{{loaded}} / {{total}} KB",
         "cancel": "取消",
