@@ -55,6 +55,8 @@ type WslShellPreference = {
 const WSL_SHELL_OPTIONS = ["sh", "bash", "zsh", "fish", "dash"] as const;
 // UI-friendly order: login shell first.
 const WSL_SHELL_FLAG_OPTIONS = ["-lic", "-lc", "-c"] as const;
+const GITHUB_REPO_URL = "https://github.com/ZRainbow1275/cc-launcher";
+const GITHUB_RELEASES_URL = `${GITHUB_REPO_URL}/releases`;
 
 const ENV_BADGE_CONFIG: Record<
   string,
@@ -242,14 +244,12 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
           : "";
 
       if (!displayVersion) {
-        await settingsApi.openExternal(
-          "https://github.com/farion1231/cc-switch/releases",
-        );
+        await settingsApi.openExternal(GITHUB_RELEASES_URL);
         return;
       }
 
       await settingsApi.openExternal(
-        `https://github.com/farion1231/cc-switch/releases/tag/${displayVersion}`,
+        `${GITHUB_RELEASES_URL}/tag/${displayVersion}`,
       );
     } catch (error) {
       console.error("[AboutSection] Failed to open release notes", error);
@@ -376,11 +376,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() =>
-                settingsApi.openExternal(
-                  "https://github.com/farion1231/cc-switch",
-                )
-              }
+              onClick={() => settingsApi.openExternal(GITHUB_REPO_URL)}
               className="h-8 gap-1.5 text-xs"
             >
               <Github className="h-3.5 w-3.5" />
